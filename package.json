@@ -1,0 +1,27 @@
+{
+  "name": "oleg-trick-bot",
+  "version": "1.0.0",
+  "description": "This is Oleg! Cool chess bot",
+  "main": "index.ts",
+  "scripts": {
+    "start": "ts-node index.ts",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/peasemaker/oleg-trick-bot.git"
+  },
+  "author": "Victor Ivanovsky",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/peasemaker/oleg-trick-bot/issues"
+  },
+  "homepage": "https://github.com/peasemaker/oleg-trick-bot#readme",
+  "devDependencies": {
+    "@types/node": "^12.6.9",
+    "install": "^0.13.0",
+    "npm": "^6.10.2",
+    "ts-node": "^8.3.0",
+    "typescript": "^3.5.3"
+  }
+}
