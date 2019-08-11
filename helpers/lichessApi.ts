@@ -1,7 +1,8 @@
+import * as oboe from 'oboe';
 import * as http from 'http';
 import * as https from 'https';
 import * as querystring from 'querystring';
-import {RoomType} from '../types';
+import {LichessGameEvent, LichessLobbyEvent, RoomType} from '../types';
 
 export default class LichessApi {
     baseUrl: string;
@@ -11,7 +12,10 @@ export default class LichessApi {
     constructor(token: string) {
         this.token = token;
         this.baseUrl = 'lichess.org';
-        this.headers = { 'Authorization': `Bearer ${this.token}` };
+        this.headers = {
+            'Authorization': `Bearer ${this.token}`,
+            'Content-Type': 'application/x-www-form-urlencoded'
+        };
     }
 
     get(path: string): Promise<http.IncomingMessage> {
@@ -23,6 +27,7 @@ export default class LichessApi {
     }
 
     acceptChallenge(challengeId: string) {
+        console.log('accept', `/api/challenge/${challengeId}/accept`);
         return this.post(`/api/challenge/${challengeId}/accept`);
     }
 
@@ -39,30 +44,44 @@ export default class LichessApi {
     }
 
     abortGame(gameId: string) {
-        return this.post(`api/bot/game/${gameId}/abort`);
+        return this.post(`/api/bot/game/${gameId}/abort`);
     }
 
     resignGame(gameId: string) {
-        return this.post(`api/bot/game/${gameId}/resign`);
+        return this.post(`/api/bot/game/${gameId}/resign`);
+    }
+
+    streamLobby(cb: (event: LichessLobbyEvent) => void) {
+        return this.createStream<LichessLobbyEvent>('/api/stream/event', cb);
+    }
+
+    streamGame(gameId: string, cb: (event: LichessGameEvent) => void) {
+        return this.createStream<LichessGameEvent>(`/api/bot/game/stream/${gameId}`, cb);
     }
 
     createStream<T>(path: string, cb: (event: T) => void) {
-
+        oboe({
+            method: 'GET',
+            url: 'https://' + this.baseUrl + path,
+            headers: this.headers
+        })
+        .node('!', (event) => {
+            cb(event);
+        })
+        .fail((error) => console.error(`STREAM ERROR: ${JSON.stringify(error)}`));
     }
 
     _sendRequest(path: string, method: 'get' | 'post', body?: any): Promise<http.IncomingMessage> {
         return new Promise((resolve, reject) => {
             const request = https.request({
+                protocol: 'https:',
                 host: this.baseUrl,
                 headers: this.headers,
                 path,
                 method
             }, (res) => resolve(res));
 
-            if (body) {
-                console.log(body);
-                request.write(querystring.stringify(body));
-            }
+            request.write(querystring.stringify(body || {}));
             request.on('error', reject);
             request.end();
         })
