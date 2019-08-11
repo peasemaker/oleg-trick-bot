@@ -1,18 +1,15 @@
-import AsyncHttps from './helpers/asyncHttps';
+import LichessApi from './helpers/lichessApi';
 import ChessGame from './helpers/chess';
 
-import {
-    LichessLobbyEvent,
-    LichessGameEvent
-} from './types';
+import {LichessGameEvent, LichessLobbyEvent, RoomType} from './types';
 
 const id = 'olegtrick';
 const token = '3LBpuFgvWMF74HgB';
 let gameId = '';
-const asyncHttps = new AsyncHttps(token);
+const lichessApi = new LichessApi(token);
 
 const createStream = async <T>(path: string, cb: (event: T) => void) => {
-    const response = await asyncHttps.get(path);
+    const response = await lichessApi.get(path);
 
     response.on('data', (data) => {
         const streamData = data.toString('utf8').split('\n');
@@ -33,13 +30,13 @@ const challengeEventListener = (event: LichessLobbyEvent) => {
     if (event.type === 'challenge') {
         console.log('streamEvent', event);
         if (!event.challenge.rated && event.challenge.challenger.id === 'victorinthesky') {
-            asyncHttps.post(`/api/challenge/${event.challenge.id}/accept`);
+            lichessApi.acceptChallenge(event.challenge.id);
         } else {
-            asyncHttps.post(`/api/challenge/${event.challenge.id}/decline`);
+            lichessApi.declineChallenge(event.challenge.id);
         }
     } else {
         console.log('gameStart', event);
-        asyncHttps.post(`/api/bot/game/${event.game.id}/chat`, {room: 'player', text: 'Hello! I am Oleg!'});
+        lichessApi.sendMessage(event.game.id, RoomType.PLAYER, 'Hello! I am Oleg!');
         createStream<LichessGameEvent>(`/api/bot/game/stream/${event.game.id}`, gameEventListener);
     }
 };
@@ -49,12 +46,12 @@ const gameEventListener = (event: LichessGameEvent) => {
         gameId = event.id;
         if (event.white.id === id) {
             console.log('I am white and move!');
-            asyncHttps.post(`/api/bot/game/${gameId}/move/e2e4`);
+            lichessApi.makeMove(gameId, 'e2e4');
         }
     } else if (event.type === 'gameState'){
         console.log('I am black and move!');
         console.log('gameId', gameId);
-        asyncHttps.post(`/api/bot/game/${gameId}/move/e7e5`);
+        lichessApi.makeMove(gameId, 'e7e5');
     }
 };
 

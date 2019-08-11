@@ -79,9 +79,14 @@ export interface LichessGameFullEvent {
     state: LichessGameStateEvent;
 }
 
+export enum RoomType {
+    PLAYER = 'player',
+    SPECTATOR = 'spectator'
+}
+
 export interface LichessChatLineEvent {
     type: 'chatLine';
-    room: string;
+    room: RoomType;
     username: string;
     text: string;
 }
