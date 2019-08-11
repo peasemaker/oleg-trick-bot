@@ -3,9 +3,9 @@
     "module": "commonjs",
     "target": "esnext",
     "moduleResolution": "node",
-    "noUnusedLocals": true,
-    "noUnusedParameters": true,
-    "strict": true,
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+    "strict": false,
     "sourceMap": true
   },
   "include": [
