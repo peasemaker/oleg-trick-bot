@@ -2,7 +2,7 @@ import * as oboe from 'oboe';
 import * as http from 'http';
 import * as https from 'https';
 import * as querystring from 'querystring';
-import {LichessGameEvent, LichessLobbyEvent, RoomType} from '../types';
+import {LichessGameEvent, LichessLobbyEvent, LichessUser, RoomType} from '../types';
 
 export default class LichessApi {
     baseUrl: string;
@@ -18,16 +18,19 @@ export default class LichessApi {
         };
     }
 
-    get(path: string): Promise<http.IncomingMessage> {
+    get(path: string) {
         return this._sendRequest(path, 'get');
     }
 
-    post(path: string, body?: any): Promise<http.IncomingMessage> {
+    post(path: string, body?: any) {
         return this._sendRequest(path, 'post', body);
     }
 
+    getAccountInfo() {
+        return this.get('/api/account');
+    }
+
     acceptChallenge(challengeId: string) {
-        console.log('accept', `/api/challenge/${challengeId}/accept`);
         return this.post(`/api/challenge/${challengeId}/accept`);
     }
 
@@ -71,7 +74,7 @@ export default class LichessApi {
         .fail((error) => console.error(`STREAM ERROR: ${JSON.stringify(error)}`));
     }
 
-    _sendRequest(path: string, method: 'get' | 'post', body?: any): Promise<http.IncomingMessage> {
+    _sendRequest(path: string, method: 'get' | 'post', body?: any): Promise<any> {
         return new Promise((resolve, reject) => {
             const request = https.request({
                 protocol: 'https:',
@@ -79,7 +82,15 @@ export default class LichessApi {
                 headers: this.headers,
                 path,
                 method
-            }, (res) => resolve(res));
+            }, (res) => {
+                let body = '';
+
+                res.on('data', (chunk) => {
+                    body += chunk.toString();
+                });
+
+                res.on('end', () => resolve(JSON.parse(body)));
+            });
 
             request.write(querystring.stringify(body || {}));
             request.on('error', reject);

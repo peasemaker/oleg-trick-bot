@@ -29,6 +29,11 @@ export type LichessTimeControl = LichessClockTimeControl | LichessUnlimitedTimeC
 
 export type LichessColor = 'black' | 'white' | 'random';
 
+export enum LobbyEventType {
+    CHALLENGE = 'challenge',
+    GAME_START = 'gameStart'
+}
+
 export interface LichessChallenge {
     id: string;
     status: string;
@@ -42,12 +47,12 @@ export interface LichessChallenge {
 }
 
 export interface LichessChallengeEvent {
-    type: 'challenge';
+    type: LobbyEventType.CHALLENGE;
     challenge: LichessChallenge;
 }
 
 export interface LichessGameStartEvent {
-    type: 'gameStart';
+    type: LobbyEventType.GAME_START;
     game: {
         id: string;
     }
@@ -55,8 +60,15 @@ export interface LichessGameStartEvent {
 
 export type LichessLobbyEvent = LichessChallengeEvent | LichessGameStartEvent;
 
+
+export enum GameEventType {
+    GAME_FULL = 'gameFull',
+    GAME_STATE = 'gameState',
+    CHAT_LINE = 'chatLine'
+}
+
 export interface LichessGameStateEvent {
-    type: 'gameState';
+    type: GameEventType.GAME_STATE;
     moves: string;
     wtime: number;
     btime: number;
@@ -67,7 +79,7 @@ export interface LichessGameStateEvent {
 }
 
 export interface LichessGameFullEvent {
-    type: 'gameFull';
+    type: GameEventType.GAME_FULL;
     id: string;
     variant: LichessGameVariant;
     speed: string;
@@ -85,10 +97,12 @@ export enum RoomType {
 }
 
 export interface LichessChatLineEvent {
-    type: 'chatLine';
+    type: GameEventType.CHAT_LINE;
     room: RoomType;
     username: string;
     text: string;
 }
 
 export type LichessGameEvent = LichessGameFullEvent | LichessGameStateEvent | LichessChatLineEvent;
+
+export const DEFAULT_POS = 'startpos';
