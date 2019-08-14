@@ -30,6 +30,8 @@ export default class LichessGame {
                     this.chessGame = new ChessGame(event.initialFen);
                 }
 
+                const moves = event.state.moves === '' ? [] : event.state.moves.split(' ');
+                this.chessGame.applyMoves(moves);
                 this.setColor(event);
                 this.playNextMove(event.state.moves);
                 break;

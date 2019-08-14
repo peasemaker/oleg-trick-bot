@@ -22,6 +22,20 @@ enum Pieces {
     bK = 11
 }
 
+enum Promotion {
+    n = 0,
+    b = 1,
+    r = 2,
+    q = 3
+}
+
+enum MoveType {
+    NORMAL = 0,
+    PROMOTION = 1,
+    ENPASSANT = 2,
+    CASTLING = 3
+}
+
 const piecesNotation = 'PNBRQKpnbrqk';
 const ranks = '12345678';
 const files = 'abcdefgh';
@@ -114,6 +128,48 @@ export default class ChessGame {
         return files[fileIndex] + ranks[7 - rankIndex];
     }
 
+    static uciToNumeric(moveUci: string): number {
+        const from = sq64(ChessGame.literalToSquare(moveUci.slice(0, 2)));
+        const to = sq64(ChessGame.literalToSquare(moveUci.slice(2, 4)));
+        const promotionUci = moveUci[4];
+        let promotion = 0;
+        let moveType = MoveType.NORMAL;
+
+        if (promotionUci) {
+            promotion = Promotion[promotionUci];
+            moveType = MoveType.PROMOTION;
+        }
+
+        return (moveType << 14) + (promotion << 12) + (from << 6) + to;
+    }
+
+    static numericToUci(moveNum: number): string {
+        const to = ChessGame.squareToLiteral(sq120(moveNum & 63));
+        const from = ChessGame.squareToLiteral(sq120((moveNum >> 6) & 63));
+        const promotion = (moveNum >> 12) & 3;
+        const moveType = moveNum >> 14;
+        let promotionUci = '';
+
+        if (moveType === MoveType.PROMOTION) {
+            switch (promotion) {
+                case Promotion.n:
+                    promotionUci = 'n';
+                    break;
+                case Promotion.b:
+                    promotionUci = 'b';
+                    break;
+                case Promotion.r:
+                    promotionUci = 'r';
+                    break;
+                case Promotion.q:
+                    promotionUci = 'q';
+                    break;
+            }
+        }
+
+        return from + to + promotionUci;
+    }
+
     parseFen(fen: string) {
         const tokens = fen.split(/\s+/);
         const position = tokens[0];
@@ -169,5 +225,54 @@ export default class ChessGame {
         console.log(`ep square: ${ChessGame.squareToLiteral(this.epSquare)}`);
         console.log(`half moves: ${this.halfMoves}`);
         console.log(`castling permission: ${this.castlingPermission.toString(2)}`);
+    }
+
+    applyMoves(moves: string[]) {
+        for (let i = 0; i < moves.length; i++) {
+            this.makeMove(moves[i]);
+        }
+    }
+
+    makeMove(moveUci: string) {
+        const moveNum = ChessGame.uciToNumeric(moveUci);
+        const to = sq120(moveNum & 63);
+        const from = sq120(moveNum >> 6 & 63);
+        const promotion = moveNum >> 12 & 3;
+        const moveType = moveNum >> 14;
+
+        this.board[to] = this.board[from];
+        this.board[from] = Squares.EMPTY;
+
+        if (moveType === MoveType.PROMOTION) {
+            let promotionPiece = 0;
+
+            switch (promotion) {
+                case Promotion.n:
+                    promotionPiece = this.turn === Side.WHITE ? Pieces.wN : Pieces.bN;
+                    break;
+                case Promotion.b:
+                    promotionPiece = this.turn === Side.WHITE ? Pieces.wB : Pieces.bB;
+                    break;
+                case Promotion.r:
+                    promotionPiece = this.turn === Side.WHITE ? Pieces.wR : Pieces.bR;
+                    break;
+                case Promotion.q:
+                    promotionPiece = this.turn === Side.WHITE ? Pieces.wQ : Pieces.bQ;
+                    break;
+            }
+
+            this.board[to] = promotionPiece;
+        }
+
+        console.log(moveNum.toString(2));
+        console.log(ChessGame.squareToLiteral(to));
+        console.log(ChessGame.squareToLiteral(from));
+        console.log(promotion);
+        console.log(moveType);
+        console.log(ChessGame.numericToUci(moveNum));
+    }
+
+    getLegalMoves() {
+
     }
 }
