@@ -7,33 +7,43 @@ enum Side {
     BLACK = 'b'
 }
 
+enum PieceType {
+    NO_PIECE_TYPE = 0,
+    PAWN,
+    KNIGHT,
+    BISHOP,
+    ROOK,
+    QUEEN,
+    KING
+}
+
 enum Pieces {
     wP = 0,
-    wN = 1,
-    wB = 2,
-    wR = 3,
-    wQ = 4,
-    wK = 5,
-    bP = 6,
-    bN = 7,
-    bB = 8,
-    bR = 9,
-    bQ = 10,
-    bK = 11
+    wN,
+    wB,
+    wR,
+    wQ,
+    wK,
+    bP,
+    bN,
+    bB,
+    bR,
+    bQ,
+    bK
 }
 
 enum Promotion {
     n = 0,
-    b = 1,
-    r = 2,
-    q = 3
+    b,
+    r,
+    q
 }
 
 enum MoveType {
     NORMAL = 0,
-    PROMOTION = 1,
-    ENPASSANT = 2,
-    CASTLING = 3
+    PROMOTION,
+    ENPASSANT,
+    CASTLING
 }
 
 const piecesNotation = 'PNBRQKpnbrqk';
@@ -42,6 +52,14 @@ const files = 'abcdefgh';
 
 enum Squares {
     EMPTY = -1,
+    A8 = 21, B8, C8, D8, E8, F8, G8, H8,
+    A7 = 31, B7, C7, D7, E7, F7, G7, H7,
+    A6 = 41, B6, C6, D6, E6, F6, G6, H6,
+    A5 = 51, B5, C5, D5, E5, F5, G5, H5,
+    A4 = 61, B4, C4, D4, E4, F4, G4, H4,
+    A3 = 71, B3, C3, D3, E3, F3, G3, H3,
+    A2 = 81, B2, C2, D2, E2, F2, G2, H2,
+    A1 = 91, B1, C1, D1, E1, F1, G1, H1,
     NOSQUARE = 99,
     OFFBOARD = 100
 }
@@ -52,6 +70,13 @@ enum Castling {
     BK = 4,
     BQ = 8
 }
+
+const WS_CASTLING_UCI = 'e1g1';
+const WL_CASTLING_UCI = 'e1c1';
+const BS_CASTLING_UCI = 'e8g8';
+const BL_CASTLING_UCI = 'e8c8';
+
+const castlingMoves = [WS_CASTLING_UCI, WL_CASTLING_UCI, BS_CASTLING_UCI, BL_CASTLING_UCI];
 
 const SQ120TO64 = [
     -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 
@@ -128,9 +153,9 @@ export default class ChessGame {
         return files[fileIndex] + ranks[7 - rankIndex];
     }
 
-    static uciToNumeric(moveUci: string): number {
-        const from = sq64(ChessGame.literalToSquare(moveUci.slice(0, 2)));
-        const to = sq64(ChessGame.literalToSquare(moveUci.slice(2, 4)));
+    uciToNumeric(moveUci: string): number {
+        const from = ChessGame.literalToSquare(moveUci.slice(0, 2));
+        const to = ChessGame.literalToSquare(moveUci.slice(2, 4));
         const promotionUci = moveUci[4];
         let promotion = 0;
         let moveType = MoveType.NORMAL;
@@ -140,7 +165,11 @@ export default class ChessGame {
             moveType = MoveType.PROMOTION;
         }
 
-        return (moveType << 14) + (promotion << 12) + (from << 6) + to;
+        if (castlingMoves.includes(moveUci) && (this.board[from] === Pieces.wK || this.board[from] === Pieces.bK)) {
+            moveType = MoveType.CASTLING;
+        }
+
+        return (moveType << 14) + (promotion << 12) + (sq64(from) << 6) + sq64(to);
     }
 
     static numericToUci(moveNum: number): string {
@@ -184,7 +213,7 @@ export default class ChessGame {
             }
         }
 
-        this.turn = Side.WHITE === tokens[1] ? Side.WHITE : Side.BLACK;
+        this.turn = (Side.WHITE === tokens[1]) ? Side.WHITE : Side.BLACK;
         
         const castling = tokens[2];
 
@@ -199,7 +228,7 @@ export default class ChessGame {
             }
         }
         
-        this.epSquare = tokens[3] === '-' ? Squares.EMPTY : ChessGame.literalToSquare(tokens[3]);
+        this.epSquare = (tokens[3] === '-') ? Squares.EMPTY : ChessGame.literalToSquare(tokens[3]);
         this.halfMoves = parseInt(tokens[4]);
     }
 
@@ -234,45 +263,86 @@ export default class ChessGame {
     }
 
     makeMove(moveUci: string) {
-        const moveNum = ChessGame.uciToNumeric(moveUci);
+        const moveNum = this.uciToNumeric(moveUci);
         const to = sq120(moveNum & 63);
         const from = sq120(moveNum >> 6 & 63);
         const promotion = moveNum >> 12 & 3;
         const moveType = moveNum >> 14;
-
-        this.board[to] = this.board[from];
-        this.board[from] = Squares.EMPTY;
 
         if (moveType === MoveType.PROMOTION) {
             let promotionPiece = 0;
 
             switch (promotion) {
                 case Promotion.n:
-                    promotionPiece = this.turn === Side.WHITE ? Pieces.wN : Pieces.bN;
+                    promotionPiece = (this.turn === Side.WHITE) ? Pieces.wN : Pieces.bN;
                     break;
                 case Promotion.b:
-                    promotionPiece = this.turn === Side.WHITE ? Pieces.wB : Pieces.bB;
+                    promotionPiece = (this.turn === Side.WHITE) ? Pieces.wB : Pieces.bB;
                     break;
                 case Promotion.r:
-                    promotionPiece = this.turn === Side.WHITE ? Pieces.wR : Pieces.bR;
+                    promotionPiece = (this.turn === Side.WHITE) ? Pieces.wR : Pieces.bR;
                     break;
                 case Promotion.q:
-                    promotionPiece = this.turn === Side.WHITE ? Pieces.wQ : Pieces.bQ;
+                    promotionPiece = (this.turn === Side.WHITE) ? Pieces.wQ : Pieces.bQ;
                     break;
             }
 
             this.board[to] = promotionPiece;
+        } else if (moveType === MoveType.CASTLING) {
+            this.board[to] = this.board[from];
+
+            switch (moveUci) {
+                case WS_CASTLING_UCI:
+                    this.board[Squares.F1] = Pieces.wR;
+                    this.board[Squares.H1] = Squares.EMPTY;
+                    break;
+                case WL_CASTLING_UCI:
+                    this.board[Squares.D1] = Pieces.wR;
+                    this.board[Squares.A1] = Squares.EMPTY;
+                    break;
+                case BS_CASTLING_UCI:
+                    this.board[Squares.F8] = Pieces.bR;
+                    this.board[Squares.H8] = Squares.EMPTY;
+                    break;
+                case BL_CASTLING_UCI:
+                    this.board[Squares.D8] = Pieces.bR;
+                    this.board[Squares.A8] = Squares.EMPTY;
+                    break;
+            }
+        } else {
+            this.board[to] = this.board[from];
         }
 
-        console.log(moveNum.toString(2));
-        console.log(ChessGame.squareToLiteral(to));
-        console.log(ChessGame.squareToLiteral(from));
-        console.log(promotion);
-        console.log(moveType);
-        console.log(ChessGame.numericToUci(moveNum));
+        this.board[from] = Squares.EMPTY;
+
+        this.turn = (this.turn === Side.WHITE) ? Side.BLACK : Side.WHITE;
+
+        // console.log(moveNum.toString(2));
+        // console.log(ChessGame.squareToLiteral(to));
+        // console.log(ChessGame.squareToLiteral(from));
+        // console.log(promotion);
+        // console.log(moveType);
+        // console.log(ChessGame.numericToUci(moveNum));
     }
 
-    getLegalMoves() {
+    getLegalMoves(): string[] {
+        const moves = [];
 
+        for (let i = 0; i < 64; i++) {
+            if (this.turn === Side.WHITE) {
+                if (this.board[sq120(i)] === Pieces.wP) {
+                    if (this.board[sq120(i) - 9] !== Squares.OFFBOARD && this.board[sq120(i) - 9] > Pieces.wK) {
+                        moves.push(ChessGame.squareToLiteral(sq120(i)) + ChessGame.squareToLiteral(sq120(i) - 9));
+                    }
+                    if (this.board[sq120(i) - 11] !== Squares.OFFBOARD && this.board[sq120(i) - 11] > Pieces.wK) {
+                        moves.push(ChessGame.squareToLiteral(sq120(i)) + ChessGame.squareToLiteral(sq120(i) - 11));
+                    }
+                }
+            } else {
+
+            }
+        }
+
+        return moves;
     }
 }
