@@ -4,6 +4,7 @@ import LichessGame from './LichessGame';
 
 let gameId = '';
 const token = '3LBpuFgvWMF74HgB';
+const whiteList = ['victorinthesky', 'droooney', 'tonygbotdev'];
 
 export default class LichessBot {
   api: LichessApi;
@@ -22,7 +23,11 @@ export default class LichessBot {
   challengeEventListener(event: LichessLobbyEvent) {
     switch(event.type) {
       case LobbyEventType.CHALLENGE:
-        this.api.acceptChallenge(event.challenge.id);
+        if (whiteList.includes(event.challenge.challenger.id)) {
+          this.api.acceptChallenge(event.challenge.id);
+        } else {
+          this.api.declineChallenge(event.challenge.id);
+        }
         break;
       case LobbyEventType.GAME_START:
         this.api.sendMessage(event.game.id, RoomType.PLAYER, 'Hello! I am Oleg!');

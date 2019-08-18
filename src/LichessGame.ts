@@ -59,7 +59,7 @@ export default class LichessGame {
       const legalMoves = this.chessGame.getLegalMoves();
       console.timeEnd('move');
 
-      console.log(legalMoves);
+      console.log(legalMoves.join('; '));
 
       if (legalMoves.length) {
         const randomIndex = Math.floor(Math.random() * legalMoves.length);

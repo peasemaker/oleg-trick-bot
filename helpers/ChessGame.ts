@@ -1,6 +1,6 @@
 const BOARD_SIZE = 120;
 const DEFAULT_FEN = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
-enum Side {
+enum Color {
   WHITE = 'w',
   BLACK = 'b'
 }
@@ -27,6 +27,10 @@ enum Pieces {
   bQ,
   bK
 }
+const PiecesByColor = {
+  [Color.WHITE]: [Pieces.wP, Pieces.wN, Pieces.wB, Pieces.wR, Pieces.wQ, Pieces.wK],
+  [Color.BLACK]: [Pieces.bP, Pieces.bN, Pieces.bB, Pieces.bR, Pieces.bQ, Pieces.bK]
+};
 enum SquareType {
   EMPTY = -1,
   OFFBOARD = 100
@@ -124,14 +128,14 @@ const PAWN_MOVES = [-10, -20];
 
 export default class ChessGame {
   board: number[];
-  turn: Side;
+  turn: Color;
   halfMoves: number;
   epSquare: number;
   castlingPermission: number;
 
   constructor(fen: string = DEFAULT_FEN) {
     this.board = ChessGame.initBoard();
-    this.turn = Side.WHITE;
+    this.turn = Color.WHITE;
     this.halfMoves = 0;
     this.epSquare = Squares.NO_SQUARE;
     this.castlingPermission = 0;
@@ -245,7 +249,7 @@ export default class ChessGame {
       }
     }
 
-    this.turn = (Side.WHITE === tokens[1]) ? Side.WHITE : Side.BLACK;
+    this.turn = (Color.WHITE === tokens[1]) ? Color.WHITE : Color.BLACK;
 
     const castling = tokens[2];
 
@@ -286,29 +290,23 @@ export default class ChessGame {
     }
 
     console.log(print);
-    // console.log(`turn: ${this.turn}`);
     console.log(`ep square: ${ChessGame.squareToLiteral(this.epSquare)}`);
-    // console.log(`half moves: ${this.halfMoves}`);
     console.log(`castling permission: ${this.castlingPermission.toString(2)}`);
+    // console.log(`half moves: ${this.halfMoves}`);
   }
 
   isWTurn() {
-    return this.turn === Side.WHITE;
+    return this.turn === Color.WHITE;
   }
 
-  isSquareAttacked(square: number): boolean {
+  isSquareAttacked(square: number, color?: Color): boolean {
     if (square === Squares.NO_SQUARE) {
       return false;
     }
-
-    const isWTurn = this.isWTurn();
-    const pawnDir = isWTurn ? 1 : -1;
-    const pawn = isWTurn ? Pieces.bP : Pieces.wP;
-    const knight = isWTurn ? Pieces.bN : Pieces.wN;
-    const bishop = isWTurn ? Pieces.bB : Pieces.wB;
-    const rook = isWTurn ? Pieces.bR : Pieces.wR;
-    const queen = isWTurn ? Pieces.bQ : Pieces.wQ;
-    const king = isWTurn ? Pieces.bK : Pieces.wK;
+    const sideColor = color || this.turn;
+    const isWhite = sideColor === Color.WHITE;
+    const pawnDir = isWhite ? -1 : 1;
+    const [pawn, knight, bishop, rook, queen, king] = PiecesByColor[sideColor];
 
     for (let i = 0; i < PAWN_CAPTURING.length; i++) {
       if (this.board[square + pawnDir * PAWN_CAPTURING[i]] === pawn) {
@@ -360,9 +358,11 @@ export default class ChessGame {
     return false;
   }
 
-  isCheck() {
+  isCheck(color?: Color) {
     let kingSquare = Squares.NO_SQUARE;
-    const king = this.isWTurn() ? Pieces.wK : Pieces.bK;
+    const sideColor = color || this.turn;
+    const oppositeColor = sideColor === Color.WHITE ? Color.BLACK : Color.WHITE;
+    const king = sideColor === Color.WHITE ? Pieces.wK : Pieces.bK;
 
     for (let i = 0; i < 64; i++) {
       if (this.board[sq120(i)] === king) {
@@ -371,7 +371,7 @@ export default class ChessGame {
       }
     }
 
-    return this.isSquareAttacked(kingSquare);
+    return this.isSquareAttacked(kingSquare, oppositeColor);
   }
 
   applyMoves(moves: string[]) {
@@ -381,9 +381,6 @@ export default class ChessGame {
   }
 
   makeMove(moveUci: string) {
-    console.log('before:', moveUci);
-    this.printBoard();
-
     const isWTurn = this.isWTurn();
     const moveNum = this.uciToNumeric(moveUci);
     const to = sq120(moveNum & 63);
@@ -503,10 +500,7 @@ export default class ChessGame {
     }
 
     this.board[from] = SquareType.EMPTY;
-    this.turn = this.isWTurn() ? Side.BLACK : Side.WHITE;
-
-    console.log('after:', moveUci);
-    this.printBoard();
+    this.turn = this.isWTurn() ? Color.BLACK : Color.WHITE;
 
     // console.log(moveNum.toString(2));
     // console.log(ChessGame.squareToLiteral(to));
@@ -516,18 +510,13 @@ export default class ChessGame {
     // console.log(ChessGame.numericToUci(moveNum));
   }
 
-  getLegalMoves(): string[] {
+  getPseudoLegalMoves(): number[] {
     const moves = [];
     const isWTurn = this.isWTurn();
     const pawnDir = isWTurn ? 1 : -1;
-    const pawn = isWTurn ? Pieces.wP : Pieces.bP;
     const longMoveRank = isWTurn ? Ranks.RANK_2 : Ranks.RANK_7;
     const prePromotionRank = isWTurn ? Ranks.RANK_7 : Ranks.RANK_2;
-    const knight = isWTurn ? Pieces.wN : Pieces.bN;
-    const bishop = isWTurn ? Pieces.wB : Pieces.bB;
-    const rook = isWTurn ? Pieces.wR : Pieces.bR;
-    const queen = isWTurn ? Pieces.wQ : Pieces.bQ;
-    const king = isWTurn ? Pieces.wK : Pieces.bK;
+    const [pawn, knight, bishop, rook, queen, king] = PiecesByColor[this.turn];
 
     for (let s = 0; s < 64; s++) {
       const sq = sq120(s);
@@ -535,24 +524,24 @@ export default class ChessGame {
         case pawn:
           for (let i = 0; i < PAWN_CAPTURING.length; i++) {
             if (this.isEnemyPiece(this.board[sq + pawnDir * PAWN_CAPTURING[i]]) || this.epSquare === sq + pawnDir * PAWN_CAPTURING[i]) {
-              moves.push(ChessGame.squareToLiteral(sq) + ChessGame.squareToLiteral(sq + pawnDir * PAWN_CAPTURING[i]));
+              moves.push((sq64(sq) << 6) + sq64(sq + pawnDir * PAWN_CAPTURING[i]));
             }
           }
           if (this.board[sq + pawnDir * PAWN_MOVES[0]] === SquareType.EMPTY) {
             if (Math.floor(sq64(sq) / 8) === prePromotionRank) {
-              moves.push(ChessGame.squareToLiteral(sq) + ChessGame.squareToLiteral(sq + pawnDir * PAWN_MOVES[0]) + 'q');
+              moves.push((Promotion.q << 12) + (sq64(sq) << 6) + sq64(sq + pawnDir * PAWN_MOVES[0]));
             } else {
-              moves.push(ChessGame.squareToLiteral(sq) + ChessGame.squareToLiteral(sq + pawnDir * PAWN_MOVES[0]));
+              moves.push((sq64(sq) << 6) + sq64(sq + pawnDir * PAWN_MOVES[0]));
             }
             if (Math.floor(sq64(sq) / 8) === longMoveRank && this.board[sq + pawnDir * PAWN_MOVES[1]] === SquareType.EMPTY) {
-              moves.push(ChessGame.squareToLiteral(sq) + ChessGame.squareToLiteral(sq + pawnDir * PAWN_MOVES[1]));
+              moves.push((sq64(sq) << 6) + sq64(sq + pawnDir * PAWN_MOVES[1]));
             }
           }
           break;
         case knight:
           for (let i = 0; i < KNIGHT_MOVES.length; i++) {
             if (this.board[sq + KNIGHT_MOVES[i]] === SquareType.EMPTY || this.isEnemyPiece(this.board[sq + KNIGHT_MOVES[i]])) {
-              moves.push(ChessGame.squareToLiteral(sq) + ChessGame.squareToLiteral(sq + KNIGHT_MOVES[i]));
+              moves.push((sq64(sq) << 6) + sq64(sq + KNIGHT_MOVES[i]));
             }
           }
           break;
@@ -561,7 +550,7 @@ export default class ChessGame {
             let nextSq = sq + BISHOP_MOVES[i];
             while(this.board[nextSq] !== SquareType.OFFBOARD) {
               if (this.isEnemyPiece(this.board[nextSq]) || this.board[nextSq] === SquareType.EMPTY) {
-                moves.push(ChessGame.squareToLiteral(sq) + ChessGame.squareToLiteral(nextSq));
+                moves.push((sq64(sq) << 6) + sq64(nextSq));
               }
 
               if (this.board[nextSq] !== SquareType.EMPTY) {
@@ -576,7 +565,7 @@ export default class ChessGame {
             let nextSq = sq + ROOK_MOVES[i];
             while(this.board[nextSq] !== SquareType.OFFBOARD) {
               if (this.isEnemyPiece(this.board[nextSq]) || this.board[nextSq] === SquareType.EMPTY) {
-                moves.push(ChessGame.squareToLiteral(sq) + ChessGame.squareToLiteral(nextSq));
+                moves.push((sq64(sq) << 6) + sq64(nextSq));
               }
 
               if (this.board[nextSq] !== SquareType.EMPTY) {
@@ -591,7 +580,7 @@ export default class ChessGame {
             let nextSq = sq + QUEEN_MOVES[i];
             while(this.board[nextSq] !== SquareType.OFFBOARD) {
               if (this.isEnemyPiece(this.board[nextSq]) || this.board[nextSq] === SquareType.EMPTY) {
-                moves.push(ChessGame.squareToLiteral(sq) + ChessGame.squareToLiteral(nextSq));
+                moves.push((sq64(sq) << 6) + sq64(nextSq));
               }
 
               if (this.board[nextSq] !== SquareType.EMPTY) {
@@ -604,21 +593,19 @@ export default class ChessGame {
         case king:
           for (let i = 0; i < KING_MOVES.length; i++) {
             if (this.board[sq + KING_MOVES[i]] === SquareType.EMPTY || this.isEnemyPiece(this.board[sq + KING_MOVES[i]])) {
-              moves.push(ChessGame.squareToLiteral(sq) + ChessGame.squareToLiteral(sq + KING_MOVES[i]));
+              moves.push((sq64(sq) << 6) + sq64(sq + KING_MOVES[i]));
             }
           }
 
           if (!this.isCheck()) {
-            console.log('not check');
             if (isWTurn) {
               if (
                   (this.castlingPermission & Castling.WK)
                   && this.board[Squares.F1] === SquareType.EMPTY
                   && this.board[Squares.G1] === SquareType.EMPTY
                   && !this.isSquareAttacked(Squares.F1)
-                  && !this.isSquareAttacked(Squares.G1)
               ) {
-                moves.push(WK_CASTLING_UCI);
+                moves.push((Squares.E1 << 6) + Squares.G1);
               }
               if (
                   (this.castlingPermission & Castling.WQ)
@@ -626,9 +613,8 @@ export default class ChessGame {
                   && this.board[Squares.C1] === SquareType.EMPTY
                   && this.board[Squares.B1] === SquareType.EMPTY
                   && !this.isSquareAttacked(Squares.D1)
-                  && !this.isSquareAttacked(Squares.C1)
               ) {
-                moves.push(WQ_CASTLING_UCI);
+                moves.push((Squares.E1 << 6) + Squares.C1);
               }
             } else {
               if (
@@ -636,9 +622,8 @@ export default class ChessGame {
                   && this.board[Squares.F8] === SquareType.EMPTY
                   && this.board[Squares.G8] === SquareType.EMPTY
                   && !this.isSquareAttacked(Squares.F8)
-                  && !this.isSquareAttacked(Squares.G8)
               ) {
-                moves.push(BK_CASTLING_UCI);
+                moves.push((Squares.E8 << 6) + Squares.G8);
               }
               if (
                   (this.castlingPermission & Castling.BQ)
@@ -646,9 +631,8 @@ export default class ChessGame {
                   && this.board[Squares.C8] === SquareType.EMPTY
                   && this.board[Squares.B8] === SquareType.EMPTY
                   && !this.isSquareAttacked(Squares.D8)
-                  && !this.isSquareAttacked(Squares.C8)
               ) {
-                moves.push(BQ_CASTLING_UCI);
+                moves.push((Squares.E8 << 6) + Squares.C8);
               }
             }
           }
@@ -657,5 +641,28 @@ export default class ChessGame {
     }
 
     return moves;
+  }
+
+  getLegalMoves(): string[] {
+    return this.getPseudoLegalMoves()
+        .filter(move => this.isMoveLegal(move))
+        .map(move => ChessGame.numericToUci(move));
+  }
+
+  isMoveLegal(move: number): boolean {
+    const to = sq120(move & 63);
+    const from = sq120(move >> 6 & 63);
+    const prevToPiece = this.board[to];
+    const prevFromPiece = this.board[from];
+
+    this.board[to] = this.board[from];
+    this.board[from] = SquareType.EMPTY;
+
+    const isCheck = this.isCheck();
+
+    this.board[to] = prevToPiece;
+    this.board[from] = prevFromPiece;
+
+    return !isCheck;
   }
 }
