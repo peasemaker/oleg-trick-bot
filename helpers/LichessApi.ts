@@ -67,11 +67,9 @@ export default class LichessApi {
       method: 'GET',
       url: 'https://' + this.baseUrl + path,
       headers: this.headers
-    })
-        .node('!', (event) => {
-          cb(event);
-        })
-        .fail((error) => console.error(`STREAM ERROR: ${JSON.stringify(error)}`));
+    }).node('!', (event) => {
+      cb(event);
+    }).fail((error) => console.error(`STREAM ERROR: ${JSON.stringify(error)}`));
   }
 
   _sendRequest(path: string, method: 'get' | 'post', body?: any): Promise<any> {

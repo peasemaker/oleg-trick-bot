@@ -1,5 +1,5 @@
 import {LichessLobbyEvent, LobbyEventType, RoomType} from '../types';
-import LichessApi from '../helpers/lichessApi';
+import LichessApi from '../helpers/LichessApi';
 import LichessGame from './LichessGame';
 
 let gameId = '';

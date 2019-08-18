@@ -1,6 +1,6 @@
 import {DEFAULT_POS, GameEventType, LichessGameEvent, LichessGameFullEvent} from '../types';
-import LichessApi from '../helpers/lichessApi';
-import ChessGame from '../helpers/chess';
+import LichessApi from '../helpers/LichessApi';
+import ChessGame from '../helpers/ChessGame';
 
 export default class LichessGame {
   gameId: string;
@@ -59,11 +59,12 @@ export default class LichessGame {
       const legalMoves = this.chessGame.getLegalMoves();
       console.timeEnd('move');
 
+      console.log(legalMoves);
+
       if (legalMoves.length) {
         const randomIndex = Math.floor(Math.random() * legalMoves.length);
         this.api.makeMove(this.gameId, legalMoves[randomIndex]);
         console.log('makeMove', legalMoves[randomIndex]);
-
       } else {
         this.api.resignGame(this.gameId);
       }
