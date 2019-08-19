@@ -444,8 +444,8 @@ export default class ChessGame {
     } else {
       if (
           Math.abs(from - to) === Math.abs(PAWN_MOVES[1])
-          && ((this.board[from] === Pieces.wP && (this.board[to - 1] === Pieces.bB || this.board[to + 1] === Pieces.bP))
-          || (this.board[from] === Pieces.bP && (this.board[to - 1] === Pieces.wB || this.board[to + 1] === Pieces.wP)))
+          && ((this.board[from] === Pieces.wP && (this.board[to - 1] === Pieces.bP || this.board[to + 1] === Pieces.bP))
+          || (this.board[from] === Pieces.bP && (this.board[to - 1] === Pieces.wP || this.board[to + 1] === Pieces.wP)))
       ) {
         this.epSquare = from + (isWTurn ? 1 : -1) * PAWN_MOVES[0];
       }
@@ -508,6 +508,9 @@ export default class ChessGame {
     // console.log(promotion);
     // console.log(moveType);
     // console.log(ChessGame.numericToUci(moveNum));
+
+    // console.log('after: ', moveUci);
+    // this.printBoard();
   }
 
   getPseudoLegalMoves(): number[] {
@@ -524,12 +527,16 @@ export default class ChessGame {
         case pawn:
           for (let i = 0; i < PAWN_CAPTURING.length; i++) {
             if (this.isEnemyPiece(this.board[sq + pawnDir * PAWN_CAPTURING[i]]) || this.epSquare === sq + pawnDir * PAWN_CAPTURING[i]) {
-              moves.push((sq64(sq) << 6) + sq64(sq + pawnDir * PAWN_CAPTURING[i]));
+              if (Math.floor(sq64(sq) / 8) === prePromotionRank) {
+                moves.push((MoveType.PROMOTION << 14) + (Promotion.q << 12) + (sq64(sq) << 6) + sq64(sq + pawnDir * PAWN_CAPTURING[i]));
+              } else {
+                moves.push((sq64(sq) << 6) + sq64(sq + pawnDir * PAWN_CAPTURING[i]));
+              }
             }
           }
           if (this.board[sq + pawnDir * PAWN_MOVES[0]] === SquareType.EMPTY) {
             if (Math.floor(sq64(sq) / 8) === prePromotionRank) {
-              moves.push((Promotion.q << 12) + (sq64(sq) << 6) + sq64(sq + pawnDir * PAWN_MOVES[0]));
+              moves.push((MoveType.PROMOTION << 14) + (Promotion.q << 12) + (sq64(sq) << 6) + sq64(sq + pawnDir * PAWN_MOVES[0]));
             } else {
               moves.push((sq64(sq) << 6) + sq64(sq + pawnDir * PAWN_MOVES[0]));
             }
@@ -655,10 +662,26 @@ export default class ChessGame {
     const prevToPiece = this.board[to];
     const prevFromPiece = this.board[from];
 
+    if (to === this.epSquare) {
+      if (this.board[from] === Pieces.wP) {
+        this.board[to - PAWN_MOVES[0]] = SquareType.EMPTY;
+      } else {
+        this.board[to + PAWN_MOVES[0]] = SquareType.EMPTY;
+      }
+    }
+
     this.board[to] = this.board[from];
     this.board[from] = SquareType.EMPTY;
 
     const isCheck = this.isCheck();
+
+    if (to === this.epSquare) {
+      if (this.board[to] === Pieces.wP) {
+        this.board[to - PAWN_MOVES[0]] = Pieces.bP;
+      } else {
+        this.board[to + PAWN_MOVES[0]] = Pieces.wP;
+      }
+    }
 
     this.board[to] = prevToPiece;
     this.board[from] = prevFromPiece;

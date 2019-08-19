@@ -87,7 +87,15 @@ export default class LichessApi {
           body += chunk.toString();
         });
 
-        res.on('end', () => resolve(JSON.parse(body)));
+        res.on('end', () => {
+          try {
+            const parsedBody = JSON.parse(body || '');
+            resolve(parsedBody);
+          } catch(error) {
+            console.error('Parse error', body);
+            reject(body);
+          }
+        });
       });
 
       request.write(querystring.stringify(body || {}));

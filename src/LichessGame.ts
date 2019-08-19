@@ -1,18 +1,21 @@
 import {DEFAULT_POS, GameEventType, LichessGameEvent, LichessGameFullEvent} from '../types';
 import LichessApi from '../helpers/LichessApi';
 import ChessGame from '../helpers/ChessGame';
+import RandomBot from './Bots/RandomBot';
 
 export default class LichessGame {
   gameId: string;
   playerId: string;
   chessGame: ChessGame;
   api: LichessApi;
+  bot: RandomBot;
   color: 'w' | 'b';
 
-  constructor(gameId, playerId, api) {
+  constructor(gameId, playerId, api, bot) {
     this.gameId = gameId;
     this.playerId = playerId;
     this.api = api;
+    this.bot = bot;
   }
 
   start() {
@@ -55,16 +58,10 @@ export default class LichessGame {
 
   playNextMove(moves: string[]) {
     if (this.isTurn(moves)) {
-      console.time('move');
-      const legalMoves = this.chessGame.getLegalMoves();
-      console.timeEnd('move');
+      const nextMove = this.bot.getNextMove(this.chessGame);
 
-      console.log(legalMoves.join('; '));
-
-      if (legalMoves.length) {
-        const randomIndex = Math.floor(Math.random() * legalMoves.length);
-        this.api.makeMove(this.gameId, legalMoves[randomIndex]);
-        console.log('makeMove', legalMoves[randomIndex]);
+      if (nextMove) {
+        this.api.makeMove(this.gameId, nextMove);
       } else {
         this.api.resignGame(this.gameId);
       }
