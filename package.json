@@ -19,6 +19,7 @@
   "homepage": "https://github.com/peasemaker/oleg-trick-bot#readme",
   "devDependencies": {
     "@types/node": "^12.6.9",
+    "@types/oboe": "^2.0.28",
     "install": "^0.13.0",
     "npm": "^6.10.2",
     "ts-node": "^8.3.0",

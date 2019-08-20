@@ -5,7 +5,6 @@ enum Color {
   BLACK = 'b'
 }
 enum PieceType {
-  NO_PIECE_TYPE = 0,
   PAWN,
   KNIGHT,
   BISHOP,
@@ -13,34 +12,24 @@ enum PieceType {
   QUEEN,
   KING
 }
-enum Pieces {
-  wP = 0,
-  wN,
-  wB,
-  wR,
-  wQ,
-  wK,
-  bP,
-  bN,
-  bB,
-  bR,
-  bQ,
-  bK
+enum Piece {
+  wP = 0, wN, wB, wR, wQ, wK,
+  bP, bN, bB, bR, bQ, bK
 }
 const PiecesByColor = {
-  [Color.WHITE]: [Pieces.wP, Pieces.wN, Pieces.wB, Pieces.wR, Pieces.wQ, Pieces.wK],
-  [Color.BLACK]: [Pieces.bP, Pieces.bN, Pieces.bB, Pieces.bR, Pieces.bQ, Pieces.bK]
+  [Color.WHITE]: [Piece.wP, Piece.wN, Piece.wB, Piece.wR, Piece.wQ, Piece.wK],
+  [Color.BLACK]: [Piece.bP, Piece.bN, Piece.bB, Piece.bR, Piece.bQ, Piece.bK]
 };
 enum SquareType {
   EMPTY = -1,
   OFFBOARD = 100
 }
-enum Promotion {
-  n = 0,
-  b,
-  r,
-  q
-}
+const Promotion: {[promotion in string]: number} = {
+  n: 0,
+  b: 1,
+  r: 2,
+  q: 3
+};
 enum MoveType {
   NORMAL = 0,
   PROMOTION,
@@ -50,6 +39,7 @@ enum MoveType {
 const PIECE_NOTATION = 'PNBRQKpnbrqk';
 const RANKS_NOTATION = '87654321';
 const FILES_NOTATION = 'abcdefgh';
+const PROMOTION_NOTATION = 'nbrq';
 enum Squares {
   A8 = 21, B8, C8, D8, E8, F8, G8, H8,
   A7 = 31, B7, C7, D7, E7, F7, G7, H7,
@@ -71,27 +61,30 @@ enum Ranks {
   RANK_2,
   RANK_1
 }
-enum Files {
-  FILE_1 = 0,
-  FILE_2,
-  FILE_3,
-  FILE_4,
-  FILE_5,
-  FILE_6,
-  FILE_7,
-  FILE_8
-}
+// enum Files {
+//   FILE_1 = 0,
+//   FILE_2,
+//   FILE_3,
+//   FILE_4,
+//   FILE_5,
+//   FILE_6,
+//   FILE_7,
+//   FILE_8
+// }
 enum Castling {
   WK = 1,
   WQ = 2,
   BK = 4,
-  BQ = 8
+  BQ = 8,
+  W = WK | WQ,
+  B = BK | BQ
 }
-const WK_CASTLING_UCI = 'e1g1';
-const WQ_CASTLING_UCI = 'e1c1';
-const BK_CASTLING_UCI = 'e8g8';
-const BQ_CASTLING_UCI = 'e8c8';
-const CASTLING_MOVES = [WK_CASTLING_UCI, WQ_CASTLING_UCI, BK_CASTLING_UCI, BQ_CASTLING_UCI];
+const CastlingFenMask: {[castling in string]: {kingSquare: number, rookSquare: number, castling: Castling}} = {
+  K: {kingSquare: Squares.E1, rookSquare: Squares.H1, castling: Castling.WK},
+  Q: {kingSquare: Squares.E1, rookSquare: Squares.A1, castling: Castling.WQ},
+  k: {kingSquare: Squares.E8, rookSquare: Squares.H8, castling: Castling.BK},
+  q: {kingSquare: Squares.E8, rookSquare: Squares.A8, castling: Castling.BQ}
+};
 const SQ120TO64 = [
   -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
   -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
@@ -132,6 +125,7 @@ export default class ChessGame {
   halfMoves: number;
   epSquare: number;
   castlingPermission: number;
+  castlingPermissionMask: {[square in string]: number};
 
   constructor(fen: string = DEFAULT_FEN) {
     this.board = ChessGame.initBoard();
@@ -139,6 +133,7 @@ export default class ChessGame {
     this.halfMoves = 0;
     this.epSquare = Squares.NO_SQUARE;
     this.castlingPermission = 0;
+    this.castlingPermissionMask = {};
 
     this.parseFen(fen);
   }
@@ -158,11 +153,11 @@ export default class ChessGame {
   }
 
   static isWPiece(piece: number): boolean {
-    return piece >= Pieces.wP && piece <= Pieces.wK;
+    return (piece >= Piece.wP) && (piece <= Piece.wK);
   }
 
   static isBPiece(piece: number): boolean {
-    return piece >= Pieces.bP && piece <= Pieces.bK;
+    return (piece >= Piece.bP) && (piece <= Piece.bK);
   }
 
   static literalToSquare(literal: string): number {
@@ -180,6 +175,20 @@ export default class ChessGame {
     return FILES_NOTATION[fileIndex] + RANKS_NOTATION[rankIndex];
   }
 
+  static makePiece(color: Color, pieceType: PieceType) {
+    return PiecesByColor[color][pieceType];
+  }
+
+  static numericToUci(moveNum: number): string {
+    const to = ChessGame.squareToLiteral(sq120(moveNum & 63));
+    const from = ChessGame.squareToLiteral(sq120((moveNum >> 6) & 63));
+    const promotion = (moveNum >> 12) & 3;
+    const moveType = moveNum >> 14;
+    const promotionUci = (moveType === MoveType.PROMOTION) ? PROMOTION_NOTATION[promotion] : '';
+
+    return from + to + promotionUci;
+  }
+
   uciToNumeric(moveUci: string): number {
     const from = ChessGame.literalToSquare(moveUci.slice(0, 2));
     const to = ChessGame.literalToSquare(moveUci.slice(2, 4));
@@ -193,42 +202,15 @@ export default class ChessGame {
       moveType = MoveType.PROMOTION;
     }
 
-    if (CASTLING_MOVES.includes(moveUci) && (fromPiece === Pieces.wK || fromPiece === Pieces.bK)) {
+    if (Math.abs(from - to) === 2 && (fromPiece === Piece.wK || fromPiece === Piece.bK)) {
       moveType = MoveType.CASTLING;
     }
 
-    if ((fromPiece === Pieces.wP || fromPiece === Pieces.bP) && this.epSquare === to) {
+    if ((fromPiece === Piece.wP || fromPiece === Piece.bP) && this.epSquare === to) {
       moveType = MoveType.ENPASSANT;
     }
 
     return (moveType << 14) + (promotion << 12) + (sq64(from) << 6) + sq64(to);
-  }
-
-  static numericToUci(moveNum: number): string {
-    const to = ChessGame.squareToLiteral(sq120(moveNum & 63));
-    const from = ChessGame.squareToLiteral(sq120((moveNum >> 6) & 63));
-    const promotion = (moveNum >> 12) & 3;
-    const moveType = moveNum >> 14;
-    let promotionUci = '';
-
-    if (moveType === MoveType.PROMOTION) {
-      switch (promotion) {
-        case Promotion.n:
-          promotionUci = 'n';
-          break;
-        case Promotion.b:
-          promotionUci = 'b';
-          break;
-        case Promotion.r:
-          promotionUci = 'r';
-          break;
-        case Promotion.q:
-          promotionUci = 'q';
-          break;
-      }
-    }
-
-    return from + to + promotionUci;
   }
 
   isEnemyPiece(piece: number): boolean {
@@ -244,7 +226,7 @@ export default class ChessGame {
       if (/\d/.test(position[i])) {
         square += parseInt(position[i]);
       } else if (PIECE_NOTATION.includes(position[i])) {
-        this.board[sq120(square)] = PIECE_NOTATION.indexOf(position[i]);
+        this.putPiece(PIECE_NOTATION.indexOf(position[i]), sq120(square));
         square++;
       }
     }
@@ -255,12 +237,10 @@ export default class ChessGame {
 
     if (castling !== '-') {
       for (let i = 0; i < castling.length; i++) {
-        switch (castling[i]) {
-          case 'K': this.castlingPermission |= Castling.WK; break;
-          case 'Q': this.castlingPermission |= Castling.WQ; break;
-          case 'k': this.castlingPermission |= Castling.BK; break;
-          case 'q': this.castlingPermission |= Castling.BQ; break;
-        }
+        const castlingFenMask = CastlingFenMask[castling[i]];
+        this.castlingPermission |= castlingFenMask.castling;
+        this.castlingPermissionMask[castlingFenMask.kingSquare] |= castlingFenMask.castling;
+        this.castlingPermissionMask[castlingFenMask.rookSquare] |= castlingFenMask.castling;
       }
     }
 
@@ -354,7 +334,6 @@ export default class ChessGame {
       }
     }
 
-
     return false;
   }
 
@@ -362,7 +341,7 @@ export default class ChessGame {
     let kingSquare = Squares.NO_SQUARE;
     const sideColor = color || this.turn;
     const oppositeColor = sideColor === Color.WHITE ? Color.BLACK : Color.WHITE;
-    const king = sideColor === Color.WHITE ? Pieces.wK : Pieces.bK;
+    const king = sideColor === Color.WHITE ? Piece.wK : Piece.bK;
 
     for (let i = 0; i < 64; i++) {
       if (this.board[sq120(i)] === king) {
@@ -372,6 +351,41 @@ export default class ChessGame {
     }
 
     return this.isSquareAttacked(kingSquare, oppositeColor);
+  }
+
+  putPiece(piece: Piece, to: number) {
+    this.board[to] = piece;
+  }
+
+  movePiece(piece: Piece, from: number, to: number) {
+    this.board[from] = SquareType.EMPTY;
+    this.board[to] = piece;
+  }
+
+  removePiece(piece: Piece, from: number) {
+    console.log(piece, from);
+  }
+
+  doCastling(color: Color, from: number, to: number) {
+    const isWhite = color === Color.WHITE;
+    const isKingSide = to > from;
+    let rookTo, rookFrom;
+    const king = ChessGame.makePiece(color, PieceType.KING);
+    const rook = ChessGame.makePiece(color, PieceType.ROOK);
+
+    if (isKingSide) {
+      rookFrom = isWhite ? Squares.H1 : Squares.H8;
+      rookTo = isWhite ? Squares.F1 : Squares.F8;
+    } else {
+      rookFrom = isWhite ? Squares.A1 : Squares.A8;
+      rookTo = isWhite ? Squares.D1 : Squares.D8;
+    }
+
+    this.board[from] = this.board[rookFrom] = SquareType.EMPTY;
+    this.removePiece(king, from);
+    this.removePiece(rook, rookFrom);
+    this.putPiece(king, to);
+    this.putPiece(rook, rookTo);
   }
 
   applyMoves(moves: string[]) {
@@ -387,119 +401,36 @@ export default class ChessGame {
     const from = sq120(moveNum >> 6 & 63);
     const promotion = moveNum >> 12 & 3;
     const moveType = moveNum >> 14;
+    const piece = this.board[from];
+    const color = this.turn;
 
     this.epSquare = Squares.NO_SQUARE;
 
     if (moveType === MoveType.PROMOTION) {
-      let promotionPiece = 0;
-
-      switch (promotion) {
-        case Promotion.n:
-          promotionPiece = isWTurn ? Pieces.wN : Pieces.bN;
-          break;
-        case Promotion.b:
-          promotionPiece = isWTurn ? Pieces.wB : Pieces.bB;
-          break;
-        case Promotion.r:
-          promotionPiece = isWTurn ? Pieces.wR : Pieces.bR;
-          break;
-        case Promotion.q:
-          promotionPiece = isWTurn ? Pieces.wQ : Pieces.bQ;
-          break;
-      }
-
-      this.board[to] = promotionPiece;
+      const promotionPiece = ChessGame.makePiece(color, promotion + PieceType.KNIGHT);
+      this.movePiece(piece, from, to);
+      this.putPiece(promotionPiece, to);
     } else if (moveType === MoveType.CASTLING) {
-      this.board[to] = this.board[from];
-
-      switch (moveUci) {
-        case WK_CASTLING_UCI:
-          this.board[Squares.F1] = Pieces.wR;
-          this.board[Squares.H1] = SquareType.EMPTY;
-          this.castlingPermission &= ~Castling.WK;
-          this.castlingPermission &= ~Castling.WQ;
-          break;
-        case WQ_CASTLING_UCI:
-          this.board[Squares.D1] = Pieces.wR;
-          this.board[Squares.A1] = SquareType.EMPTY;
-          this.castlingPermission &= ~Castling.WK;
-          this.castlingPermission &= ~Castling.WQ;
-          break;
-        case BK_CASTLING_UCI:
-          this.board[Squares.F8] = Pieces.bR;
-          this.board[Squares.H8] = SquareType.EMPTY;
-          this.castlingPermission &= ~Castling.BK;
-          this.castlingPermission &= ~Castling.BQ;
-          break;
-        case BQ_CASTLING_UCI:
-          this.board[Squares.D8] = Pieces.bR;
-          this.board[Squares.A8] = SquareType.EMPTY;
-          this.castlingPermission &= ~Castling.BK;
-          this.castlingPermission &= ~Castling.BQ;
-          break;
-      }
+      this.doCastling(color, from, to);
     } else if (moveType === MoveType.ENPASSANT) {
-      this.board[to] = this.board[from];
+      this.movePiece(piece, from, to);
       this.board[to + (isWTurn ? -1 : 1) * PAWN_MOVES[0]] = SquareType.EMPTY;
     } else {
       if (
           Math.abs(from - to) === Math.abs(PAWN_MOVES[1])
-          && ((this.board[from] === Pieces.wP && (this.board[to - 1] === Pieces.bP || this.board[to + 1] === Pieces.bP))
-          || (this.board[from] === Pieces.bP && (this.board[to - 1] === Pieces.wP || this.board[to + 1] === Pieces.wP)))
+          && ((this.board[from] === Piece.wP && (this.board[to - 1] === Piece.bP || this.board[to + 1] === Piece.bP))
+          || (this.board[from] === Piece.bP && (this.board[to - 1] === Piece.wP || this.board[to + 1] === Piece.wP)))
       ) {
         this.epSquare = from + (isWTurn ? 1 : -1) * PAWN_MOVES[0];
       }
 
-      if (this.board[from] === Pieces.wK) {
-        this.castlingPermission &= ~Castling.WK;
-        this.castlingPermission &= ~Castling.WQ;
-      }
-
-      if (this.board[from] === Pieces.bK) {
-        this.castlingPermission &= ~Castling.BK;
-        this.castlingPermission &= ~Castling.BQ;
-      }
-
-      if (this.board[from] === Pieces.wR) {
-        if (from === Squares.A1) {
-          this.castlingPermission &= ~Castling.WQ;
-        }
-        if (from === Squares.H1) {
-          this.castlingPermission &= ~Castling.WK;
-        }
-      }
-
-      if (this.board[from] === Pieces.bR) {
-        if (from === Squares.A8) {
-          this.castlingPermission &= ~Castling.BQ;
-        }
-        if (from === Squares.H8) {
-          this.castlingPermission &= ~Castling.BK;
-        }
-      }
-
-      if (this.board[to] === Pieces.wR) {
-        if (to === Squares.A1) {
-          this.castlingPermission &= ~Castling.WQ;
-        }
-        if (to === Squares.H1) {
-          this.castlingPermission &= ~Castling.WK;
-        }
-      }
-
-      if (this.board[to] === Pieces.bR) {
-        if (to === Squares.A8) {
-          this.castlingPermission &= ~Castling.BQ;
-        }
-        if (to === Squares.H8) {
-          this.castlingPermission &= ~Castling.BK;
-        }
-      }
-
-      this.board[to] = this.board[from];
+      this.movePiece(piece, from, to);
     }
 
-    this.board[from] = SquareType.EMPTY;
+    if (this.castlingPermission && (this.castlingPermissionMask[from] | this.castlingPermissionMask[to])) {
+      this.castlingPermission &= ~(this.castlingPermissionMask[from] | this.castlingPermissionMask[to]);
+    }
+
     this.turn = this.isWTurn() ? Color.BLACK : Color.WHITE;
 
     // console.log(moveNum.toString(2));
@@ -509,8 +440,8 @@ export default class ChessGame {
     // console.log(moveType);
     // console.log(ChessGame.numericToUci(moveNum));
 
-    // console.log('after: ', moveUci);
-    // this.printBoard();
+    console.log('after: ', moveUci);
+    this.printBoard();
   }
 
   getPseudoLegalMoves(): number[] {
@@ -523,6 +454,7 @@ export default class ChessGame {
 
     for (let s = 0; s < 64; s++) {
       const sq = sq120(s);
+
       switch(this.board[sq]) {
         case pawn:
           for (let i = 0; i < PAWN_CAPTURING.length; i++) {
@@ -612,7 +544,7 @@ export default class ChessGame {
                   && this.board[Squares.G1] === SquareType.EMPTY
                   && !this.isSquareAttacked(Squares.F1)
               ) {
-                moves.push((Squares.E1 << 6) + Squares.G1);
+                moves.push((sq64(Squares.E1) << 6) + sq64(Squares.G1));
               }
               if (
                   (this.castlingPermission & Castling.WQ)
@@ -621,7 +553,7 @@ export default class ChessGame {
                   && this.board[Squares.B1] === SquareType.EMPTY
                   && !this.isSquareAttacked(Squares.D1)
               ) {
-                moves.push((Squares.E1 << 6) + Squares.C1);
+                moves.push((sq64(Squares.E1) << 6) + sq64(Squares.C1));
               }
             } else {
               if (
@@ -630,7 +562,7 @@ export default class ChessGame {
                   && this.board[Squares.G8] === SquareType.EMPTY
                   && !this.isSquareAttacked(Squares.F8)
               ) {
-                moves.push((Squares.E8 << 6) + Squares.G8);
+                moves.push((sq64(Squares.E8) << 6) + sq64(Squares.G8));
               }
               if (
                   (this.castlingPermission & Castling.BQ)
@@ -639,7 +571,7 @@ export default class ChessGame {
                   && this.board[Squares.B8] === SquareType.EMPTY
                   && !this.isSquareAttacked(Squares.D8)
               ) {
-                moves.push((Squares.E8 << 6) + Squares.C8);
+                moves.push((sq64(Squares.E8) << 6) + Squares.C8);
               }
             }
           }
@@ -663,7 +595,7 @@ export default class ChessGame {
     const prevFromPiece = this.board[from];
 
     if (to === this.epSquare) {
-      if (this.board[from] === Pieces.wP) {
+      if (this.board[from] === Piece.wP) {
         this.board[to - PAWN_MOVES[0]] = SquareType.EMPTY;
       } else {
         this.board[to + PAWN_MOVES[0]] = SquareType.EMPTY;
@@ -676,10 +608,10 @@ export default class ChessGame {
     const isCheck = this.isCheck();
 
     if (to === this.epSquare) {
-      if (this.board[to] === Pieces.wP) {
-        this.board[to - PAWN_MOVES[0]] = Pieces.bP;
+      if (this.board[to] === Piece.wP) {
+        this.board[to - PAWN_MOVES[0]] = Piece.bP;
       } else {
-        this.board[to + PAWN_MOVES[0]] = Pieces.wP;
+        this.board[to + PAWN_MOVES[0]] = Piece.wP;
       }
     }
 

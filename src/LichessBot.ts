@@ -3,18 +3,18 @@ import LichessApi from '../helpers/LichessApi';
 import LichessGame from './LichessGame';
 import RandomBot from './Bots/RandomBot';
 
-let gameId = '';
 const token = '3LBpuFgvWMF74HgB';
 const whiteList = ['victorinthesky', 'droooney', 'tonygbotdev'];
 
 export default class LichessBot {
   api: LichessApi;
-  accountId: string;
   bot: RandomBot;
+  accountId: string;
 
-  constructor(bot) {
+  constructor(bot: RandomBot) {
     this.api = new LichessApi(token);
     this.bot = bot;
+    this.accountId = '';
   }
 
   async start() {

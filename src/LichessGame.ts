@@ -1,4 +1,4 @@
-import {DEFAULT_POS, GameEventType, LichessGameEvent, LichessGameFullEvent} from '../types';
+import {DEFAULT_POS, GameEventType, LichessGameEvent} from '../types';
 import LichessApi from '../helpers/LichessApi';
 import ChessGame from '../helpers/ChessGame';
 import RandomBot from './Bots/RandomBot';
@@ -11,11 +11,13 @@ export default class LichessGame {
   bot: RandomBot;
   color: 'w' | 'b';
 
-  constructor(gameId, playerId, api, bot) {
+  constructor(gameId: string, playerId: string, api: LichessApi, bot: RandomBot) {
     this.gameId = gameId;
     this.playerId = playerId;
     this.api = api;
     this.bot = bot;
+    this.chessGame = new ChessGame();
+    this.color = 'w';
   }
 
   start() {
@@ -27,15 +29,13 @@ export default class LichessGame {
       case GameEventType.CHAT_LINE:
         break;
       case GameEventType.GAME_FULL: {
-        if (event.initialFen === DEFAULT_POS) {
-          this.chessGame = new ChessGame();
-        } else {
+        if (event.initialFen !== DEFAULT_POS) {
           this.chessGame = new ChessGame(event.initialFen);
         }
 
+        this.color = event.white.id === this.playerId ? 'w' : 'b';
         const moves = event.state.moves === '' ? [] : event.state.moves.split(' ');
         this.chessGame.applyMoves(moves);
-        this.setColor(event);
         this.playNextMove(moves);
         break;
       }
@@ -66,9 +66,5 @@ export default class LichessGame {
         this.api.resignGame(this.gameId);
       }
     }
-  }
-
-  setColor(event: LichessGameFullEvent) {
-    this.color = event.white.id === this.playerId ? 'w' : 'b';
   }
 }
