@@ -12,6 +12,5 @@ const game = new ChessGame('1k6/4Q3/7p/2P4P/8/8/P2P1PP1/RNBQK2R w KQ - 1 25');
 // const game = new ChessGame('1nbqkbnr/Pppppppp/8/8/8/8/1PPPPPPP/RNBQKBNR w KQkq -');
 
 // game.printBoard();
-console.log(game.getLegalMoves());
 // console.log('###########');
 // console.log(game.getLegalMoves());

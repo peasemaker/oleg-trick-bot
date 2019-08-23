@@ -6,7 +6,7 @@ export default class RandomBot {
     const legalMoves = chessGame.getLegalMoves();
     console.timeEnd('move');
 
-    console.log(legalMoves.join('; '));
+    // console.log(legalMoves.join('; '));
     const randomIndex = Math.floor(Math.random() * legalMoves.length);
 
     return legalMoves[randomIndex];

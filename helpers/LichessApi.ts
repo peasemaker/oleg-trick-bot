@@ -1,8 +1,7 @@
 import * as oboe from 'oboe';
-import * as http from 'http';
 import * as https from 'https';
 import * as querystring from 'querystring';
-import {LichessGameEvent, LichessLobbyEvent, LichessUser, RoomType} from '../types';
+import {LichessGameEvent, LichessLobbyEvent, RoomType} from '../types';
 
 export default class LichessApi {
   baseUrl: string;
