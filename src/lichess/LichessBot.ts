@@ -1,7 +1,7 @@
-import {LichessLobbyEvent, LobbyEventType, RoomType} from '../types';
-import LichessApi from '../helpers/LichessApi';
+import {LichessLobbyEvent, LobbyEventType, RoomType} from './types';
+import LichessApi from './LichessApi';
 import LichessGame from './LichessGame';
-import RandomBot from './Bots/RandomBot';
+import RandomBot from '../bots/RandomBot';
 
 const token = '3LBpuFgvWMF74HgB';
 const whiteList = ['victorinthesky', 'droooney', 'tonygbotdev'];

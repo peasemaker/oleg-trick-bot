@@ -1,7 +1,7 @@
-import {DEFAULT_POS, GameEventType, LichessGameEvent} from '../types';
-import LichessApi from '../helpers/LichessApi';
-import ChessGame from '../helpers/ChessGame';
-import RandomBot from './Bots/RandomBot';
+import {DEFAULT_POS, GameEventType, LichessGameEvent} from './types';
+import LichessApi from './LichessApi';
+import ChessGame from '../chess/ChessGame';
+import RandomBot from '../bots/RandomBot';
 
 export default class LichessGame {
   gameId: string;

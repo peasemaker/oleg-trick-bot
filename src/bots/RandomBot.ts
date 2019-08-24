@@ -1,4 +1,4 @@
-import ChessGame from '../../helpers/ChessGame';
+import ChessGame from '../chess/ChessGame';
 
 export default class RandomBot {
   getNextMove(chessGame: ChessGame) {
