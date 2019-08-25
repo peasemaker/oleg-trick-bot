@@ -168,6 +168,7 @@ class ChessGame {
   positionKey: bigint;
   positionsTable: Map<bigint, number>;
 
+  private pieceIndex: number[];
   private castlingPermissionMask: {[square in string]: number};
   private zobrist: Zobrist;
 
@@ -183,6 +184,7 @@ class ChessGame {
     this.positionKey = 0n;
     this.positionsTable = new Map<bigint, number>();
 
+    this.pieceIndex = new Array(64).fill(0);
     this.castlingPermissionMask = {};
     this.zobrist = {
       pieceKeys: new Array(12).fill(0).map(() => new Array(64).fill(0).map(() => randInt64())),
@@ -357,11 +359,11 @@ class ChessGame {
     }
 
     console.log(print);
-    // console.log(`piece count: ${this.pieceCount}`);
-    // for (let i = 0; i < this.pieceList.length; i++) {
-    //   const pieces = ['w_pawn', 'w_khight', 'w_bishop', 'w_rook', 'w_queen', 'w_king', 'b_pawn', 'b_khight', 'b_bishop', 'b_rook', 'b_queen', 'b_king'];
-    //   console.log(pieces[i], this.pieceList[i].map(sq => ChessGame.squareToLiteral(sq)));
-    // }
+    console.log(`piece count: ${this.pieceCount}`);
+    for (let i = 0; i < this.pieceList.length; i++) {
+      const pieces = ['w_pawn', 'w_khight', 'w_bishop', 'w_rook', 'w_queen', 'w_king', 'b_pawn', 'b_khight', 'b_bishop', 'b_rook', 'b_queen', 'b_king'];
+      console.log(pieces[i], this.pieceList[i].map(sq => ChessGame.squareToLiteral(sq)));
+    }
     // console.log(`ep square: ${ChessGame.squareToLiteral(this.epSquare)}`);
     // console.log(`castling permission: ${this.castlingPermission.toString(2)}`);
     console.log(`half moves: ${this.halfMoves}`);
@@ -481,31 +483,22 @@ class ChessGame {
 
   putPiece(piece: Piece, to: number) {
     this.board[to] = piece;
-    this.pieceList[piece][this.pieceCount[piece]++] = to;
+    this.pieceIndex[to] = this.pieceCount[piece]++;
+    this.pieceList[piece][this.pieceIndex[to]] = to;
     this.allPieceCount++;
   }
 
   movePiece(piece: Piece, from: number, to: number) {
     this.board[from] = SquareType.EMPTY;
     this.board[to] = piece;
-    const index = this.pieceList[piece].findIndex((sq) =>  sq === from);
-
-    if (index === -1) {
-      console.error('ERROR IN MOVE PIECE');
-      return;
-    }
-
-    this.pieceList[piece][index] = to;
+    this.pieceIndex[to] = this.pieceIndex[from];
+    this.pieceList[piece][this.pieceIndex[to]] = to;
   }
 
   removePiece(piece: Piece, from: number) {
-    const index = this.pieceList[piece].findIndex((sq) => sq === from);
-
-    if (index === -1) {
-      return;
-    }
-
-    this.pieceList[piece][index] = this.pieceList[piece][--this.pieceCount[piece]];
+    const lastSquare = this.pieceList[piece][--this.pieceCount[piece]];
+    this.pieceIndex[lastSquare] = this.pieceIndex[from];
+    this.pieceList[piece][this.pieceIndex[lastSquare]] = lastSquare;
     this.pieceList[piece][this.pieceCount[piece]] = Squares.NO_SQUARE;
     this.allPieceCount--;
   }
@@ -561,6 +554,12 @@ class ChessGame {
 
     this.positionKey ^= this.zobrist.pieceKeys[piece][sq64(from)] ^ this.zobrist.pieceKeys[piece][sq64(to)];
 
+    if (captured !== SquareType.EMPTY) {
+      this.removePiece(captured, capturedSquare);
+      this.halfMoves = 0;
+      this.positionKey ^= this.zobrist.pieceKeys[captured][sq64(capturedSquare)];
+    }
+
     if (moveType === MoveType.PROMOTION) {
       const promotionPiece = ChessGame.createPiece(color, promotion + PieceType.KNIGHT);
       this.removePiece(piece, from);
@@ -588,12 +587,6 @@ class ChessGame {
       this.movePiece(piece, from, to);
     }
 
-    if (captured !== SquareType.EMPTY) {
-      this.removePiece(captured, capturedSquare);
-      this.halfMoves = 0;
-      this.positionKey ^= this.zobrist.pieceKeys[captured][sq64(capturedSquare)];
-    }
-
     if (piece === Piece.wP || piece === Piece.bP) {
       this.halfMoves = 0;
     }
@@ -607,8 +600,8 @@ class ChessGame {
     this.turn = opColor;
     this.positionKey ^= this.zobrist.sideKey;
 
-    console.log('after: ', moveUci);
-    this.printBoard();
+    // console.log('after: ', moveUci);
+    // this.printBoard();
 
     // console.log(moveNum.toString(2));
     // console.log(ChessGame.squareToLiteral(to));
