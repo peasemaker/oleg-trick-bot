@@ -784,10 +784,17 @@ class ChessGame {
     return moves;
   }
 
-  getLegalMoves(): string[] {
-    return this.getPseudoLegalMoves()
-      .filter(move => this.isMoveLegal(move))
-      .map(move => ChessGame.numericToUci(move));
+  getLegalMoves(): number[] {
+    const legalMoves = [];
+    const pseudoLegalMoves = this.getPseudoLegalMoves();
+
+    for (let i = 0, l = pseudoLegalMoves.length; i < l; i++) {
+      if (this.isMoveLegal(pseudoLegalMoves[i])) {
+        legalMoves.push(pseudoLegalMoves[i]);
+      }
+    }
+
+    return legalMoves;
   }
 
   isMoveLegal(move: number): boolean {
