@@ -61,7 +61,7 @@ export default class LichessGame {
       const nextMove = this.bot.getNextMove(this.chessGame);
 
       if (nextMove) {
-        this.api.makeMove(this.gameId, nextMove);
+        // this.api.makeMove(this.gameId, nextMove);
       } else {
         this.api.resignGame(this.gameId);
       }

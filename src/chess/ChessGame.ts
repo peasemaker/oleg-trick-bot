@@ -359,14 +359,14 @@ class ChessGame {
     }
 
     console.log(print);
-    console.log(`piece count: ${this.pieceCount}`);
-    for (let i = 0; i < this.pieceList.length; i++) {
-      const pieces = ['w_pawn', 'w_khight', 'w_bishop', 'w_rook', 'w_queen', 'w_king', 'b_pawn', 'b_khight', 'b_bishop', 'b_rook', 'b_queen', 'b_king'];
-      console.log(pieces[i], this.pieceList[i].map(sq => ChessGame.squareToLiteral(sq)));
-    }
+    // console.log(`piece count: ${this.pieceCount}`);
+    // for (let i = 0; i < this.pieceList.length; i++) {
+    //   const pieces = ['w_pawn', 'w_khight', 'w_bishop', 'w_rook', 'w_queen', 'w_king', 'b_pawn', 'b_khight', 'b_bishop', 'b_rook', 'b_queen', 'b_king'];
+    //   console.log(pieces[i], this.pieceList[i].map(sq => ChessGame.squareToLiteral(sq)));
+    // }
     // console.log(`ep square: ${ChessGame.squareToLiteral(this.epSquare)}`);
     // console.log(`castling permission: ${this.castlingPermission.toString(2)}`);
-    console.log(`half moves: ${this.halfMoves}`);
+    // console.log(`half moves: ${this.halfMoves}`);
   }
 
   isWTurn() {
@@ -450,12 +450,12 @@ class ChessGame {
     if (this.allPieceCount === 2) {
       return true;
     } else if (
-        this.allPieceCount === 3
-        && (this.pieceCount[Piece.wB] === 1
+      this.allPieceCount === 3
+      && (this.pieceCount[Piece.wB] === 1
         || this.pieceCount[Piece.wN] === 1
         || this.pieceCount[Piece.bB] === 1
         || this.pieceCount[Piece.bN] === 1
-        )
+      )
     ) {
       return true;
     } else if (this.pieceCount[Piece.wB] + this.pieceCount[Piece.bB] === this.allPieceCount - 2) {
@@ -465,19 +465,26 @@ class ChessGame {
       const firstBishopColor = SQUARE_COLOR[firstBishop];
 
       return (
-          whiteBishops.every(bishopSquare => SQUARE_COLOR[bishopSquare] === firstBishopColor)
-          && blackBishops.every(bishopSquare => SQUARE_COLOR[bishopSquare] === firstBishopColor)
+        whiteBishops.every(bishopSquare => SQUARE_COLOR[bishopSquare] === firstBishopColor)
+        && blackBishops.every(bishopSquare => SQUARE_COLOR[bishopSquare] === firstBishopColor)
       );
     }
 
     return false;
   }
 
+  isThreefoldRepetition(): boolean {
+    const positionCount = this.positionsTable.get(this.positionKey);
+
+    return !!positionCount && positionCount >= 3;
+  }
+
   isDraw(): boolean {
     return (
-        this.halfMoves >= 100
-        || this.isInsufficientMaterial()
-        || this.isStalemate()
+      this.halfMoves >= 100
+      || this.isThreefoldRepetition()
+      || this.isInsufficientMaterial()
+      || this.isStalemate()
     );
   }
 
@@ -576,9 +583,9 @@ class ChessGame {
       this.positionKey ^= this.zobrist.pieceKeys[captured][sq64(capturedSquare)];
     } else {
       if (
-          Math.abs(from - to) === Math.abs(PAWN_MOVES[color].advanced)
-          && ((piece === Piece.wP && (this.board[to - 1] === Piece.bP || this.board[to + 1] === Piece.bP))
-          || (piece === Piece.bP && (this.board[to - 1] === Piece.wP || this.board[to + 1] === Piece.wP)))
+        Math.abs(from - to) === Math.abs(PAWN_MOVES[color].advanced)
+        && ((piece === Piece.wP && (this.board[to - 1] === Piece.bP || this.board[to + 1] === Piece.bP))
+        || (piece === Piece.bP && (this.board[to - 1] === Piece.wP || this.board[to + 1] === Piece.wP)))
       ) {
         this.epSquare = from + PAWN_MOVES[color].normal;
         this.positionKey ^= this.zobrist.epKeys[sq64(this.epSquare) & 7];
@@ -599,6 +606,14 @@ class ChessGame {
 
     this.turn = opColor;
     this.positionKey ^= this.zobrist.sideKey;
+
+    const positionCount = this.positionsTable.get(this.positionKey);
+
+    if (positionCount) {
+      this.positionsTable.set(this.positionKey, positionCount + 1);
+    } else {
+      this.positionsTable.set(this.positionKey, 1);
+    }
 
     // console.log('after: ', moveUci);
     // this.printBoard();
@@ -725,37 +740,37 @@ class ChessGame {
             if (!this.isCheck()) {
               if (isWTurn) {
                 if (
-                    (this.castlingPermission & Castling.WK)
-                    && this.board[Squares.F1] === SquareType.EMPTY
-                    && this.board[Squares.G1] === SquareType.EMPTY
-                    && !this.isSquareAttacked(Squares.F1)
+                  (this.castlingPermission & Castling.WK)
+                  && this.board[Squares.F1] === SquareType.EMPTY
+                  && this.board[Squares.G1] === SquareType.EMPTY
+                  && !this.isSquareAttacked(Squares.F1)
                 ) {
                   moves.push(ChessGame.createCastlingMove(Squares.E1, Squares.G1));
                 }
                 if (
-                    (this.castlingPermission & Castling.WQ)
-                    && this.board[Squares.D1] === SquareType.EMPTY
-                    && this.board[Squares.C1] === SquareType.EMPTY
-                    && this.board[Squares.B1] === SquareType.EMPTY
-                    && !this.isSquareAttacked(Squares.D1)
+                  (this.castlingPermission & Castling.WQ)
+                  && this.board[Squares.D1] === SquareType.EMPTY
+                  && this.board[Squares.C1] === SquareType.EMPTY
+                  && this.board[Squares.B1] === SquareType.EMPTY
+                  && !this.isSquareAttacked(Squares.D1)
                 ) {
                   moves.push(ChessGame.createCastlingMove(Squares.E1, Squares.C1));
                 }
               } else {
                 if (
-                    (this.castlingPermission & Castling.BK)
-                    && this.board[Squares.F8] === SquareType.EMPTY
-                    && this.board[Squares.G8] === SquareType.EMPTY
-                    && !this.isSquareAttacked(Squares.F8)
+                  (this.castlingPermission & Castling.BK)
+                  && this.board[Squares.F8] === SquareType.EMPTY
+                  && this.board[Squares.G8] === SquareType.EMPTY
+                  && !this.isSquareAttacked(Squares.F8)
                 ) {
                   moves.push(ChessGame.createCastlingMove(Squares.E8, Squares.G8));
                 }
                 if (
-                    (this.castlingPermission & Castling.BQ)
-                    && this.board[Squares.D8] === SquareType.EMPTY
-                    && this.board[Squares.C8] === SquareType.EMPTY
-                    && this.board[Squares.B8] === SquareType.EMPTY
-                    && !this.isSquareAttacked(Squares.D8)
+                  (this.castlingPermission & Castling.BQ)
+                  && this.board[Squares.D8] === SquareType.EMPTY
+                  && this.board[Squares.C8] === SquareType.EMPTY
+                  && this.board[Squares.B8] === SquareType.EMPTY
+                  && !this.isSquareAttacked(Squares.D8)
                 ) {
                   moves.push(ChessGame.createCastlingMove(Squares.E8, Squares.C8));
                 }
@@ -771,8 +786,8 @@ class ChessGame {
 
   getLegalMoves(): string[] {
     return this.getPseudoLegalMoves()
-        .filter(move => this.isMoveLegal(move))
-        .map(move => ChessGame.numericToUci(move));
+      .filter(move => this.isMoveLegal(move))
+      .map(move => ChessGame.numericToUci(move));
   }
 
   isMoveLegal(move: number): boolean {
