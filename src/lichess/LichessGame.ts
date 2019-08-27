@@ -2,13 +2,16 @@ import {DEFAULT_POS, GameEventType, LichessGameEvent} from './types';
 import LichessApi from './LichessApi';
 import ChessGame from '../chess/ChessGame';
 import RandomBot from '../bots/RandomBot';
+import SemiRandomBot from '../bots/SemiRandomBot';
+
+type Bot = RandomBot | SemiRandomBot;
 
 export default class LichessGame {
   gameId: string;
   playerId: string;
   chessGame: ChessGame;
   api: LichessApi;
-  bot: RandomBot;
+  bot: Bot;
   color: 'w' | 'b';
 
   constructor(gameId: string, playerId: string, api: LichessApi, bot: RandomBot) {
@@ -35,13 +38,13 @@ export default class LichessGame {
 
         this.color = event.white.id === this.playerId ? 'w' : 'b';
         const moves = event.state.moves === '' ? [] : event.state.moves.split(' ');
-        this.chessGame.applyMoves(moves);
+        this.chessGame.applyUciMoves(moves);
         this.playNextMove(moves);
         break;
       }
       case GameEventType.GAME_STATE: {
         const moves = event.moves === '' ? [] : event.moves.split(' ');
-        this.chessGame.makeMove(moves[moves.length - 1]);
+        this.chessGame.makeUciMove(moves[moves.length - 1]);
         this.playNextMove(moves);
         break;
       }
@@ -58,13 +61,14 @@ export default class LichessGame {
 
   playNextMove(moves: string[]) {
     if (this.isTurn(moves)) {
+      const start = process.hrtime.bigint();
+
       const nextMove = this.bot.getNextMove(this.chessGame);
 
-      if (nextMove) {
-        this.api.makeMove(this.gameId, nextMove);
-      } else {
-        this.api.resignGame(this.gameId);
-      }
+      const end = process.hrtime.bigint();
+      console.log(`move ${nextMove} time: ${Number(end - start) / 1000000} ms`);
+
+      this.api.makeMove(this.gameId, nextMove);
     }
   }
 }

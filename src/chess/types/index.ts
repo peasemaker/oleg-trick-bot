@@ -4,7 +4,8 @@ export interface GameState {
   prevEpSquare: number;
   prevCastlingPermission: number;
   prevPositionKey: bigint;
-  capturedPiece: number;
+  prevMovedPiece: number;
+  prevCapturedPiece: number;
 }
 
 export interface Zobrist {
