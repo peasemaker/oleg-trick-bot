@@ -1,4 +1,4 @@
-import {Zobrist} from './types';
+import {GameState, Zobrist} from './types';
 
 const BOARD_SIZE = 120;
 const DEFAULT_FEN = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
@@ -167,6 +167,7 @@ class ChessGame {
   pieceList: number[][];
   positionKey: bigint;
   positionsTable: Map<bigint, number>;
+  history: GameState[];
 
   private pieceIndex: number[];
   private castlingPermissionMask: {[square in string]: number};
@@ -183,6 +184,7 @@ class ChessGame {
     this.pieceList = new Array(PIECE_NUMBER).fill(0).map(() => []);
     this.positionKey = 0n;
     this.positionsTable = new Map<bigint, number>();
+    this.history = [];
 
     this.pieceIndex = new Array(64).fill(0);
     this.castlingPermissionMask = {};
@@ -285,7 +287,7 @@ class ChessGame {
   }
 
   isEnemyPiece(piece: number): boolean {
-    return this.isWTurn() ? ChessGame.isBlackPiece(piece) : ChessGame.isWhitePiece(piece);
+    return this.turn === Color.WHITE ? ChessGame.isBlackPiece(piece) : ChessGame.isWhitePiece(piece);
   }
 
   loadFen(fen: string) {
@@ -367,10 +369,6 @@ class ChessGame {
     // console.log(`ep square: ${ChessGame.squareToLiteral(this.epSquare)}`);
     // console.log(`castling permission: ${this.castlingPermission.toString(2)}`);
     // console.log(`half moves: ${this.halfMoves}`);
-  }
-
-  isWTurn() {
-    return this.turn === Color.WHITE;
   }
 
   isSquareAttacked(square: number, color?: Color): boolean {
@@ -510,7 +508,7 @@ class ChessGame {
     this.allPieceCount--;
   }
 
-  doCastling(color: Color, from: number, to: number): number[] {
+  doCastling(color: Color, from: number, to: number, revert: boolean = false): number[] {
     const isWhite = color === Color.WHITE;
     const isKingSide = to > from;
     let rookTo, rookFrom;
@@ -525,11 +523,11 @@ class ChessGame {
       rookTo = isWhite ? Squares.D1 : Squares.D8;
     }
 
-    this.board[from] = this.board[rookFrom] = SquareType.EMPTY;
-    this.removePiece(king, from);
-    this.removePiece(rook, rookFrom);
-    this.putPiece(king, to);
-    this.putPiece(rook, rookTo);
+    this.board[revert ? to : from] = this.board[revert ? rookTo : rookFrom] = SquareType.EMPTY;
+    this.removePiece(king, revert ? to : from);
+    this.removePiece(rook, revert ? rookTo : rookFrom);
+    this.putPiece(king, revert ? from : to);
+    this.putPiece(rook, revert ? rookFrom : rookTo);
 
     return [rookFrom, rookTo];
   }
@@ -551,6 +549,15 @@ class ChessGame {
     const opColor = (color === Color.WHITE) ? Color.BLACK : Color.WHITE;
     const captured = (moveType === MoveType.ENPASSANT) ? ChessGame.createPiece(opColor, PieceType.PAWN) : this.board[to];
     const capturedSquare = (moveType === MoveType.ENPASSANT) ? to + PAWN_MOVES[opColor].normal : to;
+
+    this.history.push({
+      prevMove: moveNum,
+      prevHalfMoves: this.halfMoves,
+      prevEpSquare: this.epSquare,
+      prevCastlingPermission: this.castlingPermission,
+      prevPositionKey: this.positionKey,
+      capturedPiece: captured
+    });
 
     if (this.epSquare !== Squares.NO_SQUARE) {
       this.positionKey ^= this.zobrist.epKeys[sq64(this.epSquare) & 7];
@@ -615,8 +622,8 @@ class ChessGame {
       this.positionsTable.set(this.positionKey, 1);
     }
 
-    // console.log('after: ', moveUci);
-    // this.printBoard();
+    console.log('after: ', moveUci);
+    this.printBoard();
 
     // console.log(moveNum.toString(2));
     // console.log(ChessGame.squareToLiteral(to));
@@ -626,13 +633,63 @@ class ChessGame {
     // console.log(ChessGame.numericToUci(moveNum));
   }
 
+  revertMove() {
+    const prevState = this.history.pop();
+
+    if (!prevState) {
+      return;
+    }
+
+    const {
+      prevMove,
+      prevHalfMoves,
+      prevEpSquare,
+      prevCastlingPermission,
+      prevPositionKey,
+      capturedPiece
+    } = prevState;
+
+    const prevColor = this.turn === Color.WHITE ? Color.BLACK : Color.WHITE;
+
+    this.turn = prevColor;
+    this.halfMoves = prevHalfMoves;
+    this.epSquare = prevEpSquare;
+    this.castlingPermission = prevCastlingPermission;
+    this.positionKey = prevPositionKey;
+
+    const to = sq120(prevMove & 63);
+    const from = sq120(prevMove >> 6 & 63);
+    const promotion = prevMove >> 12 & 3;
+    const moveType = prevMove >> 14;
+    const piece = this.board[to];
+    const capturedSquare = (moveType === MoveType.ENPASSANT) ? to - PAWN_MOVES[prevColor].normal : to;
+
+    if (moveType === MoveType.PROMOTION) {
+      const pawn = ChessGame.createPiece(prevColor, PieceType.PAWN);
+      this.removePiece(piece, to);
+      this.putPiece(pawn, from);
+      this.board[to] = SquareType.EMPTY;
+    } else if (moveType === MoveType.CASTLING) {
+      this.doCastling(prevColor, from, to, true);
+    } else {
+      this.movePiece(piece, to, from);
+
+      if (capturedPiece !== SquareType.EMPTY) {
+        this.putPiece(capturedPiece, capturedSquare);
+      }
+    }
+
+    console.log('revert: ', ChessGame.numericToUci(prevMove));
+    this.printBoard();
+  }
+
   getPseudoLegalMoves(): number[] {
     const moves = [];
     const color = this.turn;
     const pawnMove = PAWN_MOVES[color].normal;
     const pawnMoveAdvanced = PAWN_MOVES[color].advanced;
     const pawnCapturing = PAWN_CAPTURING[color];
-    const isWTurn = this.isWTurn();
+    const isWTurn = color === Color.WHITE;
     const longMoveRank = isWTurn ? Ranks.RANK_2 : Ranks.RANK_7;
     const prePromotionRank = isWTurn ? Ranks.RANK_7 : Ranks.RANK_2;
     const [pawn, knight, bishop, rook, queen, king] = PiecesByColor[this.turn];
