@@ -169,7 +169,6 @@ class ChessGame {
   positionsTable: Map<bigint, number>;
   history: GameState[];
 
-  private pieceIndex: number[];
   private castlingPermissionMask: {[square in string]: number};
   private zobrist: Zobrist;
 
@@ -186,7 +185,6 @@ class ChessGame {
     this.positionsTable = new Map<bigint, number>();
     this.history = [];
 
-    this.pieceIndex = new Array(64).fill(0);
     this.castlingPermissionMask = {};
     this.zobrist = {
       pieceKeys: new Array(12).fill(0).map(() => new Array(64).fill(0).map(() => randInt64())),
@@ -349,10 +347,10 @@ class ChessGame {
         // if (this.isSquareAttacked(sq120(i))) {
         //   print += 'X';
         // } else {
-        print += '.';
+        print += '.  ';
         // }
       } else {
-        print += PIECE_NOTATION[square];
+        print += PIECE_NOTATION[square] + '  ';
       }
 
       if ((i + 1) % 8 === 0) {
@@ -362,10 +360,10 @@ class ChessGame {
 
     console.log(print);
     // console.log(`piece count: ${this.pieceCount}`);
-    // for (let i = 0; i < this.pieceList.length; i++) {
-    //   const pieces = ['w_pawn', 'w_khight', 'w_bishop', 'w_rook', 'w_queen', 'w_king', 'b_pawn', 'b_khight', 'b_bishop', 'b_rook', 'b_queen', 'b_king'];
-    //   console.log(pieces[i], this.pieceList[i].map(sq => ChessGame.squareToLiteral(sq)));
-    // }
+    for (let i = 0; i < this.pieceList.length; i++) {
+      const pieces = ['w_pawn', 'w_khight', 'w_bishop', 'w_rook', 'w_queen', 'w_king', 'b_pawn', 'b_khight', 'b_bishop', 'b_rook', 'b_queen', 'b_king'];
+      console.log(pieces[i], this.pieceList[i].map(sq => ChessGame.squareToLiteral(sq)));
+    }
     // console.log(`ep square: ${ChessGame.squareToLiteral(this.epSquare)}`);
     // console.log(`castling permission: ${this.castlingPermission.toString(2)}`);
     // console.log(`half moves: ${this.halfMoves}`);
@@ -488,22 +486,20 @@ class ChessGame {
 
   putPiece(piece: Piece, to: number) {
     this.board[to] = piece;
-    this.pieceIndex[to] = this.pieceCount[piece]++;
-    this.pieceList[piece][this.pieceIndex[to]] = to;
+    this.pieceList[piece][this.pieceCount[piece]++] = to;
     this.allPieceCount++;
   }
 
   movePiece(piece: Piece, from: number, to: number) {
     this.board[from] = SquareType.EMPTY;
     this.board[to] = piece;
-    this.pieceIndex[to] = this.pieceIndex[from];
-    this.pieceList[piece][this.pieceIndex[to]] = to;
+    const index = this.pieceList[piece].indexOf(from);
+    this.pieceList[piece][index] = to;
   }
 
   removePiece(piece: Piece, from: number) {
-    const lastSquare = this.pieceList[piece][--this.pieceCount[piece]];
-    this.pieceIndex[lastSquare] = this.pieceIndex[from];
-    this.pieceList[piece][this.pieceIndex[lastSquare]] = lastSquare;
+    const index = this.pieceList[piece].indexOf(from);
+    this.pieceList[piece][index] = this.pieceList[piece][--this.pieceCount[piece]];
     this.pieceList[piece][this.pieceCount[piece]] = Squares.NO_SQUARE;
     this.allPieceCount--;
   }
@@ -538,8 +534,8 @@ class ChessGame {
     }
   }
 
-  makeMove(moveUci: string) {
-    const moveNum = this.uciToNumeric(moveUci);
+  makeMove(move: number | string) {
+    const moveNum = typeof move === 'string' ? this.uciToNumeric(move) : move;
     const to = sq120(moveNum & 63);
     const from = sq120(moveNum >> 6 & 63);
     const promotion = moveNum >> 12 & 3;
@@ -565,6 +561,12 @@ class ChessGame {
     }
 
     this.halfMoves++;
+
+    if (piece === SquareType.EMPTY) {
+      console.log('empty piece');
+      this.printBoard();
+      console.log(ChessGame.numericToUci(moveNum));
+    }
 
     this.positionKey ^= this.zobrist.pieceKeys[piece][sq64(from)] ^ this.zobrist.pieceKeys[piece][sq64(to)];
 
@@ -622,8 +624,8 @@ class ChessGame {
       this.positionsTable.set(this.positionKey, 1);
     }
 
-    console.log('after: ', moveUci);
-    this.printBoard();
+    // console.log('after: ', ChessGame.numericToUci(moveNum));
+    // this.printBoard();
 
     // console.log(moveNum.toString(2));
     // console.log(ChessGame.squareToLiteral(to));
@@ -651,6 +653,14 @@ class ChessGame {
 
     const prevColor = this.turn === Color.WHITE ? Color.BLACK : Color.WHITE;
 
+    const positionCount = this.positionsTable.get(this.positionKey)!;
+
+    if (positionCount === 1) {
+      this.positionsTable.delete(this.positionKey);
+    } else {
+      this.positionsTable.set(this.positionKey, positionCount - 1);
+    }
+
     this.turn = prevColor;
     this.halfMoves = prevHalfMoves;
     this.epSquare = prevEpSquare;
@@ -667,11 +677,13 @@ class ChessGame {
     if (moveType === MoveType.PROMOTION) {
       const pawn = ChessGame.createPiece(prevColor, PieceType.PAWN);
       this.removePiece(piece, to);
-      this.putPiece(pawn, from);
+      this.putPiece(pawn, to);
       this.board[to] = SquareType.EMPTY;
     } else if (moveType === MoveType.CASTLING) {
       this.doCastling(prevColor, from, to, true);
-    } else {
+    }
+
+    if (moveType !== MoveType.CASTLING) {
       this.movePiece(piece, to, from);
 
       if (capturedPiece !== SquareType.EMPTY) {
@@ -679,8 +691,8 @@ class ChessGame {
       }
     }
 
-    console.log('revert: ', ChessGame.numericToUci(prevMove));
-    this.printBoard();
+    // console.log('revert: ', ChessGame.numericToUci(prevMove));
+    // this.printBoard();
   }
 
   getPseudoLegalMoves(): number[] {
