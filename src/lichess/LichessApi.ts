@@ -18,11 +18,11 @@ export default class LichessApi {
   }
 
   get(path: string) {
-    return this._sendRequest(path, 'get');
+    return this.sendRequest(path, 'get');
   }
 
   post(path: string, body?: any) {
-    return this._sendRequest(path, 'post', body);
+    return this.sendRequest(path, 'post', body);
   }
 
   getAccountInfo() {
@@ -71,7 +71,7 @@ export default class LichessApi {
     }).fail((error) => console.error(`STREAM ERROR: ${JSON.stringify(error)}`));
   }
 
-  _sendRequest(path: string, method: 'get' | 'post', body?: any): Promise<any> {
+  private sendRequest(path: string, method: 'get' | 'post', body?: any): Promise<any> {
     return new Promise((resolve, reject) => {
       const request = https.request({
         protocol: 'https:',
@@ -103,3 +103,74 @@ export default class LichessApi {
     })
   }
 }
+
+// createStream<T>(url: string): AsyncIterable<T> {
+//   const results: IteratorResult<T>[] = [];
+// let result = '';
+// let flush: ((data: IteratorResult<T>) => void) | null = null;
+//
+// return {
+//   [Symbol.asyncIterator]: () => {
+//     this.sendRequest(url, 'get', null, async (res) => {
+//       for await (const data of res) {
+//         if (data instanceof Buffer) {
+//           const lines = data.toString('utf8').split('\n');
+//
+//           lines.forEach((data, ix) => {
+//             if (data) {
+//               data = ix === 0
+//                 ? result + data
+//                 : data;
+//
+//               try {
+//                 results.push({
+//                   done: false,
+//                   value: JSON.parse(data)
+//                 });
+//
+//                 result = '';
+//               } catch (err) {
+//                 result = data;
+//               }
+//             }
+//           });
+//
+//           if (flush) {
+//             const result = results.shift();
+//
+//             if (result) {
+//               flush(result);
+//             }
+//           }
+//         }
+//       }
+//
+//       const end = { done: true } as IteratorResult<T>;
+//
+//       if (flush) {
+//         flush(end);
+//       } else {
+//         results.push(end);
+//       }
+//     });
+//
+//     return {
+//       next() {
+//         return new Promise<IteratorResult<T>>((resolve) => {
+//           const result = results.shift();
+//
+//           if (result) {
+//             resolve(result);
+//           } else {
+//             flush = (data) => {
+//               resolve(data);
+//
+//               flush = null;
+//             };
+//           }
+//         });
+//       }
+//     };
+//   }
+// };
+// }

@@ -3,8 +3,8 @@ import {GameState, Zobrist} from './types';
 const BOARD_SIZE = 120;
 const DEFAULT_FEN = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
 enum Color {
-  WHITE = 'w',
-  BLACK = 'b'
+  WHITE = 0,
+  BLACK = 1
 }
 enum PieceType {
   PAWN,
@@ -20,10 +20,10 @@ enum Piece {
   bP, bN, bB, bR, bQ, bK
 }
 const PIECE_NUMBER = 12;
-const PiecesByColor = {
-  [Color.WHITE]: [Piece.wP, Piece.wN, Piece.wB, Piece.wR, Piece.wQ, Piece.wK],
-  [Color.BLACK]: [Piece.bP, Piece.bN, Piece.bB, Piece.bR, Piece.bQ, Piece.bK]
-};
+const PiecesByColor = [
+  [Piece.wP, Piece.wN, Piece.wB, Piece.wR, Piece.wQ, Piece.wK],
+  [Piece.bP, Piece.bN, Piece.bB, Piece.bR, Piece.bQ, Piece.bK]
+];
 enum SquareType {
   EMPTY = -1,
   OFFBOARD = 100
@@ -136,14 +136,14 @@ const BISHOP_MOVES = [-11, -9, 9, 11];
 const ROOK_MOVES = [-10, -1, 1, 10];
 const QUEEN_MOVES = [-11, -10, -9, -1, 1, 9, 10, 11];
 const KING_MOVES = [-11, -10, -9, -1, 1, 9, 10, 11];
-const PAWN_CAPTURING = {
-  [Color.WHITE] : [-9, -11],
-  [Color.BLACK] : [9, 11]
-};
-const PAWN_MOVES = {
-  [Color.WHITE]: {normal: -10, advanced: -20},
-  [Color.BLACK]: {normal: 10, advanced: 20},
-};
+const PAWN_CAPTURING = [
+  [-9, -11],
+  [9, 11]
+];
+const PAWN_MOVES = [
+  {normal: -10, advanced: -20},
+  {normal: 10, advanced: 20}
+];
 
 const randInt64 = (): bigint => {
   let int64 = 0n;
@@ -225,6 +225,14 @@ class ChessGame {
 
   static rank(sq: number): number {
     return sq64(sq) >> 3;
+  }
+
+  static moveFrom(move: number): number {
+    return sq120((move >> 6) & 63);
+  }
+
+  static moveTo(move: number): number {
+    return sq120((move & 63));
   }
 
   static isWhitePiece(piece: number): boolean {
@@ -319,7 +327,7 @@ class ChessGame {
       }
     }
 
-    this.turn = (Color.WHITE === tokens[1]) ? Color.WHITE : Color.BLACK;
+    this.turn = (tokens[1] === 'w') ? Color.WHITE : Color.BLACK;
 
     const castling = tokens[2];
 
@@ -390,7 +398,7 @@ class ChessGame {
     if (square === Squares.NO_SQUARE) {
       return false;
     }
-    const sideColor = color || this.turn;
+    const sideColor = color === undefined ? this.turn ^ 1 : color;
     const [pawn, knight, bishop, rook, queen, king] = PiecesByColor[sideColor];
 
     for (let i = 0; i < PAWN_CAPTURING[sideColor].length; i++) {
@@ -443,12 +451,11 @@ class ChessGame {
   }
 
   isCheck(color?: Color): boolean {
-    const sideColor = color || this.turn;
-    const oppositeColor = sideColor === Color.WHITE ? Color.BLACK : Color.WHITE;
-    const king = sideColor === Color.WHITE ? Piece.wK : Piece.bK;
+    const sideColor = color === undefined ? this.turn : color;
+    const king = ChessGame.createPiece(sideColor, PieceType.KING);
     const kingSquare = this.pieceList[king][0];
 
-    return this.isSquareAttacked(kingSquare, oppositeColor);
+    return this.isSquareAttacked(kingSquare, sideColor ^ 1);
   }
 
   isCheckmate(): boolean {
@@ -568,7 +575,7 @@ class ChessGame {
     const moveType = move >> 14;
     const piece = this.board[from];
     const color = this.turn;
-    const opColor = (color === Color.WHITE) ? Color.BLACK : Color.WHITE;
+    const opColor = color ^ 1;
     const captured = (moveType === MoveType.ENPASSANT) ? ChessGame.createPiece(opColor, PieceType.PAWN) : this.board[to];
     const capturedSquare = (moveType === MoveType.ENPASSANT) ? to + PAWN_MOVES[opColor].normal : to;
 
@@ -676,7 +683,7 @@ class ChessGame {
       prevCapturedPiece
     } = prevState;
 
-    const prevColor = this.turn === Color.WHITE ? Color.BLACK : Color.WHITE;
+    const prevColor = this.turn ^ 1;
 
     const positionCount = this.positionsTable.get(this.positionKey)!;
 

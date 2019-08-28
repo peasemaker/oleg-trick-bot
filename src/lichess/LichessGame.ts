@@ -12,7 +12,7 @@ export default class LichessGame {
   chessGame: ChessGame;
   api: LichessApi;
   bot: Bot;
-  color: 'w' | 'b';
+  color: 0 | 1;
 
   constructor(gameId: string, playerId: string, api: LichessApi, bot: RandomBot) {
     this.gameId = gameId;
@@ -20,7 +20,7 @@ export default class LichessGame {
     this.api = api;
     this.bot = bot;
     this.chessGame = new ChessGame();
-    this.color = 'w';
+    this.color = 0;
   }
 
   start() {
@@ -36,7 +36,7 @@ export default class LichessGame {
           this.chessGame = new ChessGame(event.initialFen);
         }
 
-        this.color = event.white.id === this.playerId ? 'w' : 'b';
+        this.color = event.white.id === this.playerId ? 0 : 1;
         const moves = event.state.moves === '' ? [] : event.state.moves.split(' ');
         this.chessGame.applyUciMoves(moves);
         this.playNextMove(moves);
@@ -56,7 +56,7 @@ export default class LichessGame {
   isTurn(moves: string[]) {
     const remainder = moves.length % 2;
 
-    return this.color === 'w' ? remainder === 0 : remainder === 1;
+    return this.color === 0 ? remainder === 0 : remainder === 1;
   }
 
   playNextMove(moves: string[]) {

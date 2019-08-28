@@ -21,13 +21,15 @@ export default class SemiRandomBot {
 
           if (PIECE_VALUES[capturedType] >= PIECE_VALUES[movedType]) {
             captures.push(legalMoves[i]);
+          } else if (!chessGame.isSquareAttacked(ChessGame.moveTo(legalMoves[i]), chessGame.turn)) {
+            captures.push(legalMoves[i]);
           }
         }
         chessGame.revertMove();
       }
 
       // console.log('checkmates', checkmates.map(m => ChessGame.numericToUci(m)).join('; '));
-      // console.log('captures', captures.map(m => ChessGame.numericToUci(m)).join('; '));
+      console.log('captures', captures.map(m => ChessGame.numericToUci(m)).join('; '));
 
       if (checkmates.length) {
         pickedMove = checkmates[Math.floor(Math.random() * checkmates.length)];
