@@ -10,9 +10,11 @@ export default class SemiRandomBot {
       let pickedMove = legalMoves[randomIndex];
       const checkmates = [];
       const captures = [];
+      const saveMoves = [];
 
       for (let i = 0; i < legalMoves.length; i++) {
         chessGame.makeMove(legalMoves[i]);
+        const isSquareSave = !chessGame.isSquareAttacked(ChessGame.moveTo(legalMoves[i]), chessGame.turn);
         if (chessGame.isCheckmate()) {
           checkmates.push(legalMoves[i]);
         } else if (chessGame.capturedPiece !== -1) {
@@ -21,20 +23,25 @@ export default class SemiRandomBot {
 
           if (PIECE_VALUES[capturedType] >= PIECE_VALUES[movedType]) {
             captures.push(legalMoves[i]);
-          } else if (!chessGame.isSquareAttacked(ChessGame.moveTo(legalMoves[i]), chessGame.turn)) {
+          } else if (isSquareSave) {
             captures.push(legalMoves[i]);
           }
+        } else if (isSquareSave) {
+          saveMoves.push(legalMoves[i]);
         }
         chessGame.revertMove();
       }
 
       // console.log('checkmates', checkmates.map(m => ChessGame.numericToUci(m)).join('; '));
       console.log('captures', captures.map(m => ChessGame.numericToUci(m)).join('; '));
+      console.log('saveMoves', saveMoves.map(m => ChessGame.numericToUci(m)).join('; '));
 
       if (checkmates.length) {
         pickedMove = checkmates[Math.floor(Math.random() * checkmates.length)];
       } else if (captures.length) {
         pickedMove = captures[Math.floor(Math.random() * captures.length)];
+      } else if (saveMoves.length) {
+        pickedMove = saveMoves[Math.floor(Math.random() * saveMoves.length)];
       }
 
       return ChessGame.numericToUci(pickedMove);
