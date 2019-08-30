@@ -104,5 +104,3 @@ export interface LichessChatLineEvent {
 }
 
 export type LichessGameEvent = LichessGameFullEvent | LichessGameStateEvent | LichessChatLineEvent;
-
-export const DEFAULT_POS = 'startpos';

@@ -1,8 +1,12 @@
-import {LichessLobbyEvent, LobbyEventType, RoomType} from './types';
 import LichessApi from './LichessApi';
 import LichessGame from './LichessGame';
 import RandomBot from '../bots/RandomBot';
-import {Bot} from '../types';
+import {
+  LichessLobbyEvent,
+  LobbyEventType,
+  RoomType,
+  Bot
+} from '../types';
 
 const token = '3LBpuFgvWMF74HgB';
 const whiteList = ['victorinthesky', 'droooney', 'tonygbotdev'];
@@ -34,7 +38,6 @@ export default class LichessBot {
         }
         break;
       case LobbyEventType.GAME_START:
-        this.api.sendMessage(event.game.id, RoomType.PLAYER, 'Hello! I am Oleg!');
         this.startGame(event.game.id);
         break;
       default:

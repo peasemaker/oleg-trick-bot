@@ -1,8 +1,12 @@
-import {DEFAULT_POS, GameEventType, LichessGameEvent} from './types';
 import LichessApi from './LichessApi';
-import RandomBot from '../bots/RandomBot';
-import SemiRandomBot from '../bots/SemiRandomBot';
-import {Bot} from '../types';
+import {
+  GameEventType,
+  LichessGameEvent,
+  Bot, RoomType
+} from '../types';
+import {
+  DEFAULT_POS
+} from '../constants';
 
 export default class LichessGame {
   gameId: string;
@@ -34,6 +38,12 @@ export default class LichessGame {
 
         this.color = event.white.id === this.playerId ? 0 : 1;
         const moves = event.state.moves === '' ? [] : event.state.moves.split(' ');
+
+        if (moves.length === 0) {
+          console.log(`Game ${this.gameId} started!`);
+          this.api.sendMessage(this.gameId, RoomType.PLAYER, 'Hello! I am Oleg!');
+        }
+
         this.bot.applyUciMoves(moves);
         this.playNextMove(moves);
         break;

@@ -1,7 +1,11 @@
-import * as oboe from 'oboe';
+import * as http from 'http';
 import * as https from 'https';
 import * as querystring from 'querystring';
-import {LichessGameEvent, LichessLobbyEvent, RoomType} from './types';
+import {
+  LichessGameEvent,
+  LichessLobbyEvent,
+  RoomType
+} from '../types';
 
 export default class LichessApi {
   baseUrl: string;
@@ -61,17 +65,38 @@ export default class LichessApi {
     return this.createStream<LichessGameEvent>(`/api/bot/game/stream/${gameId}`, cb);
   }
 
-  createStream<T>(path: string, cb: (event: T) => void) {
-    oboe({
-      method: 'GET',
-      url: 'https://' + this.baseUrl + path,
-      headers: this.headers
-    }).node('!', (event) => {
-      cb(event);
-    }).fail((error) => console.error(`STREAM ERROR: ${JSON.stringify(error)}`));
+  async createStream<T>(path: string, cb: (event: T) => void) {
+    const response = await this.simpleRequest(path, 'get');
+    let prevData = '';
+
+    response.on('data', (data) => {
+      const streamData = data.split('\n');
+
+      for (let i = 0; i < streamData.length; i++) {
+        if (!streamData[i]) {
+          continue;
+        }
+        let streamEvent: T;
+
+        try {
+          streamEvent = JSON.parse(prevData + streamData[i]);
+        } catch (error) {
+          console.error('stream parse error', error);
+          prevData += streamData[i];
+          continue;
+        }
+
+        prevData = '';
+        cb(streamEvent);
+      }
+    });
+
+    response.on('end', () => {
+      console.log('stream is ended!');
+    });
   }
 
-  private sendRequest(path: string, method: 'get' | 'post', body?: any): Promise<any> {
+  private async simpleRequest(path: string, method: 'get' | 'post', body?: any): Promise<http.IncomingMessage> {
     return new Promise((resolve, reject) => {
       const request = https.request({
         protocol: 'https:',
@@ -80,27 +105,36 @@ export default class LichessApi {
         path,
         method
       }, (res) => {
-        let body = '';
-
-        res.on('data', (chunk) => {
-          body += chunk.toString();
-        });
-
-        res.on('end', () => {
-          try {
-            const parsedBody = JSON.parse(body || '');
-            resolve(parsedBody);
-          } catch(error) {
-            console.error('Parse error', body);
-            reject(body);
-          }
-        });
+        res.setEncoding('utf8');
+        resolve(res);
       });
 
       request.write(querystring.stringify(body || {}));
       request.on('error', reject);
       request.end();
-    })
+    });
+  }
+
+  private async sendRequest(path: string, method: 'get' | 'post', body?: any): Promise<any> {
+    const response = await this.simpleRequest(path, method, body);
+
+    return new Promise((resolve, reject) => {
+      let body = '';
+
+      response.on('data', (chunk) => {
+        body += chunk;
+      });
+
+      response.on('end', () => {
+        try {
+          const parsedBody = JSON.parse(body || '');
+          resolve(parsedBody);
+        } catch(error) {
+          console.error('Parse error', body);
+          reject(body);
+        }
+      });
+    });
   }
 }
 

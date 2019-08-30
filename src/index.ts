@@ -2,6 +2,7 @@ import ChessGame from './chess/ChessGame';
 import LichessBot from './lichess/LichessBot';
 import RandomBot from './bots/RandomBot';
 import SemiRandomBot from './bots/SemiRandomBot';
+import MinimaxBot from './bots/MinimaxBot';
 
 const botOleg = new LichessBot(SemiRandomBot);
 botOleg.start();
