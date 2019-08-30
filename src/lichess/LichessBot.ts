@@ -2,19 +2,20 @@ import {LichessLobbyEvent, LobbyEventType, RoomType} from './types';
 import LichessApi from './LichessApi';
 import LichessGame from './LichessGame';
 import RandomBot from '../bots/RandomBot';
+import {Bot} from '../types';
 
 const token = '3LBpuFgvWMF74HgB';
 const whiteList = ['victorinthesky', 'droooney', 'tonygbotdev'];
 
 export default class LichessBot {
   api: LichessApi;
-  bot: RandomBot;
   accountId: string;
+  botType: new(...args: any[]) => Bot;
 
-  constructor(bot: RandomBot) {
+  constructor(botType: new(...args: any[]) => Bot) {
     this.api = new LichessApi(token);
-    this.bot = bot;
     this.accountId = '';
+    this.botType = botType;
   }
 
   async start() {
@@ -42,7 +43,7 @@ export default class LichessBot {
   }
 
   startGame(gameId: string) {
-    const game = new LichessGame(gameId, this.accountId, this.api, this.bot);
+    const game = new LichessGame(gameId, this.accountId, this.api, this.botType);
     game.start();
   }
 }

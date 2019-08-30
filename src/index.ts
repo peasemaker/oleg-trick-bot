@@ -3,9 +3,7 @@ import LichessBot from './lichess/LichessBot';
 import RandomBot from './bots/RandomBot';
 import SemiRandomBot from './bots/SemiRandomBot';
 
-const randomBot = new RandomBot();
-const semiRandomBot = new SemiRandomBot();
-const botOleg = new LichessBot(semiRandomBot);
+const botOleg = new LichessBot(SemiRandomBot);
 botOleg.start();
 
 const game = new ChessGame('1nbqkbnr/Pppppppp/8/8/8/8/1PPPPPPP/RNBQKBNR w KQkq - 0 1');

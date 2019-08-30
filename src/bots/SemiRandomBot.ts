@@ -2,9 +2,9 @@ import ChessGame from '../chess/ChessGame';
 
 const PIECE_VALUES = [1, 3, 3, 5, 9, Infinity];
 
-export default class SemiRandomBot {
-  getNextMove(chessGame: ChessGame) {
-    const legalMoves = chessGame.getLegalMoves();
+export default class SemiRandomBot extends ChessGame {
+  getNextMove() {
+    const legalMoves = this.getLegalMoves();
     try {
       const randomIndex = Math.floor(Math.random() * legalMoves.length);
       let pickedMove = legalMoves[randomIndex];
@@ -13,13 +13,13 @@ export default class SemiRandomBot {
       const saveMoves = [];
 
       for (let i = 0; i < legalMoves.length; i++) {
-        chessGame.makeMove(legalMoves[i]);
-        const isSquareSave = !chessGame.isSquareAttacked(ChessGame.moveTo(legalMoves[i]), chessGame.turn);
-        if (chessGame.isCheckmate()) {
+        this.makeMove(legalMoves[i]);
+        const isSquareSave = !this.isSquareAttacked(ChessGame.moveTo(legalMoves[i]), this.turn);
+        if (this.isCheckmate()) {
           checkmates.push(legalMoves[i]);
-        } else if (chessGame.capturedPiece !== -1) {
-          const movedType = ChessGame.pieceType((chessGame.movedPiece));
-          const capturedType = ChessGame.pieceType(chessGame.capturedPiece);
+        } else if (this.capturedPiece !== -1) {
+          const movedType = ChessGame.pieceType((this.movedPiece));
+          const capturedType = ChessGame.pieceType(this.capturedPiece);
 
           if (PIECE_VALUES[capturedType] >= PIECE_VALUES[movedType]) {
             captures.push(legalMoves[i]);
@@ -29,7 +29,7 @@ export default class SemiRandomBot {
         } else if (isSquareSave) {
           saveMoves.push(legalMoves[i]);
         }
-        chessGame.revertMove();
+        this.revertMove();
       }
 
       // console.log('checkmates', checkmates.map(m => ChessGame.numericToUci(m)).join('; '));

@@ -1,25 +1,21 @@
 import {DEFAULT_POS, GameEventType, LichessGameEvent} from './types';
 import LichessApi from './LichessApi';
-import ChessGame from '../chess/ChessGame';
 import RandomBot from '../bots/RandomBot';
 import SemiRandomBot from '../bots/SemiRandomBot';
-
-type Bot = RandomBot | SemiRandomBot;
+import {Bot} from '../types';
 
 export default class LichessGame {
   gameId: string;
   playerId: string;
-  chessGame: ChessGame;
   api: LichessApi;
   bot: Bot;
   color: 0 | 1;
 
-  constructor(gameId: string, playerId: string, api: LichessApi, bot: RandomBot) {
+  constructor(gameId: string, playerId: string, api: LichessApi, botType: new(...args: any[]) => Bot) {
     this.gameId = gameId;
     this.playerId = playerId;
     this.api = api;
-    this.bot = bot;
-    this.chessGame = new ChessGame();
+    this.bot = new botType();
     this.color = 0;
   }
 
@@ -33,18 +29,18 @@ export default class LichessGame {
         break;
       case GameEventType.GAME_FULL: {
         if (event.initialFen !== DEFAULT_POS) {
-          this.chessGame = new ChessGame(event.initialFen);
+          this.bot.loadFen(event.initialFen);
         }
 
         this.color = event.white.id === this.playerId ? 0 : 1;
         const moves = event.state.moves === '' ? [] : event.state.moves.split(' ');
-        this.chessGame.applyUciMoves(moves);
+        this.bot.applyUciMoves(moves);
         this.playNextMove(moves);
         break;
       }
       case GameEventType.GAME_STATE: {
         const moves = event.moves === '' ? [] : event.moves.split(' ');
-        this.chessGame.makeUciMove(moves[moves.length - 1]);
+        this.bot.makeUciMove(moves[moves.length - 1]);
         this.playNextMove(moves);
         break;
       }
@@ -63,7 +59,7 @@ export default class LichessGame {
     if (this.isTurn(moves)) {
       const start = process.hrtime.bigint();
 
-      const nextMove = this.bot.getNextMove(this.chessGame);
+      const nextMove = this.bot.getNextMove();
 
       const end = process.hrtime.bigint();
       console.log(`move ${nextMove} time: ${Number(end - start) / 1000000} ms`);
