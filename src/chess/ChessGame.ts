@@ -14,7 +14,7 @@ enum PieceType {
   QUEEN,
   KING
 }
-const PIECE_VALUES = [1, 3, 3, 5, 9, Infinity];
+const PIECE_VALUES = [1, 3, 3, 5, 9, 1000, -1, -3, -3, -5, -9, -1000];
 enum Piece {
   wP = 0, wN, wB, wR, wQ, wK,
   bP, bN, bB, bR, bQ, bK
@@ -171,6 +171,7 @@ class ChessGame {
   positionKey: bigint;
   positionsTable: Map<bigint, number>;
   history: GameState[];
+  materialScore: number;
 
   private castlingPermissionMask: {[square in string]: number};
   private zobrist: Zobrist;
@@ -189,6 +190,7 @@ class ChessGame {
     this.positionKey = 0n;
     this.positionsTable = new Map<bigint, number>();
     this.history = [];
+    this.materialScore = 0;
 
     this.castlingPermissionMask = {};
     this.zobrist = {
@@ -383,12 +385,13 @@ class ChessGame {
       }
     }
 
-    console.log(print);
+    // console.log(print);
+    console.log(`material score: ${this.materialScore}`);
     // console.log(`piece count: ${this.pieceCount}`);
-    for (let i = 0; i < this.pieceList.length; i++) {
-      const pieces = ['w_pawn', 'w_khight', 'w_bishop', 'w_rook', 'w_queen', 'w_king', 'b_pawn', 'b_khight', 'b_bishop', 'b_rook', 'b_queen', 'b_king'];
-      console.log(pieces[i], this.pieceList[i].map(sq => ChessGame.squareToLiteral(sq)));
-    }
+    // for (let i = 0; i < this.pieceList.length; i++) {
+    //   const pieces = ['w_pawn', 'w_khight', 'w_bishop', 'w_rook', 'w_queen', 'w_king', 'b_pawn', 'b_khight', 'b_bishop', 'b_rook', 'b_queen', 'b_king'];
+    //   console.log(pieces[i], this.pieceList[i].map(sq => ChessGame.squareToLiteral(sq)));
+    // }
     // console.log(`ep square: ${ChessGame.squareToLiteral(this.epSquare)}`);
     // console.log(`castling permission: ${this.castlingPermission.toString(2)}`);
     // console.log(`half moves: ${this.halfMoves}`);
@@ -512,6 +515,7 @@ class ChessGame {
     this.board[to] = piece;
     this.pieceList[piece][this.pieceCount[piece]++] = to;
     this.allPieceCount++;
+    this.materialScore += PIECE_VALUES[piece];
   }
 
   movePiece(piece: Piece, from: number, to: number) {
@@ -526,6 +530,7 @@ class ChessGame {
     this.pieceList[piece][index] = this.pieceList[piece][--this.pieceCount[piece]];
     this.pieceList[piece][this.pieceCount[piece]] = Squares.NO_SQUARE;
     this.allPieceCount--;
+    this.materialScore -= PIECE_VALUES[piece];
   }
 
   doCastling(color: Color, from: number, to: number, revert: boolean = false): number[] {
@@ -655,8 +660,8 @@ class ChessGame {
       this.positionsTable.set(this.positionKey, 1);
     }
 
-    // console.log('after: ', ChessGame.numericToUci(move));
-    // this.printBoard();
+    console.log('after: ', ChessGame.numericToUci(move));
+    this.printBoard();
 
     // console.log(move.toString(2));
     // console.log(ChessGame.squareToLiteral(to));
