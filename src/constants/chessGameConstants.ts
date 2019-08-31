@@ -12,7 +12,7 @@ export enum PieceType {
   QUEEN,
   KING
 }
-export const PIECE_VALUES = [1, 3, 3, 5, 9, 1000, -1, -3, -3, -5, -9, -1000];
+export const PIECE_VALUES = [1, 3, 3, 5, 9, 0];
 export enum Piece {
   wP = 0, wN, wB, wR, wQ, wK,
   bP, bN, bB, bR, bQ, bK

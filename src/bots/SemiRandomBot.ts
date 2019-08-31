@@ -3,7 +3,7 @@ import ChessGame from '../chess/ChessGame';
 const PIECE_VALUES = [1, 3, 3, 5, 9, Infinity];
 
 export default class SemiRandomBot extends ChessGame {
-  getNextMove() {
+  getNextMove(): number {
     const legalMoves = this.getLegalMoves();
     const randomIndex = Math.floor(Math.random() * legalMoves.length);
     let pickedMove = legalMoves[randomIndex];
@@ -43,6 +43,6 @@ export default class SemiRandomBot extends ChessGame {
       pickedMove = saveMoves[Math.floor(Math.random() * saveMoves.length)];
     }
 
-    return ChessGame.numericToUci(pickedMove);
+    return pickedMove;
   }
 }

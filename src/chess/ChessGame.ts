@@ -46,7 +46,7 @@ class ChessGame {
   positionKey: bigint;
   positionsTable: Map<bigint, number>;
   history: GameState[];
-  materialScore: number;
+  materialScore: number[];
 
   private castlingPermissionMask: {[square in string]: number};
   private zobrist: Zobrist;
@@ -65,7 +65,7 @@ class ChessGame {
     this.positionKey = 0n;
     this.positionsTable = new Map<bigint, number>();
     this.history = [];
-    this.materialScore = 0;
+    this.materialScore = [0, 0];
 
     this.castlingPermissionMask = {};
     this.zobrist = {
@@ -94,6 +94,10 @@ class ChessGame {
 
   static pieceType(piece: number): number {
     return piece % 6;
+  }
+
+  static pieceColor(piece: number): number {
+    return ChessGame.isWhitePiece(piece) ? Color.WHITE : Color.BLACK;
   }
 
   static file(sq: number): number {
@@ -260,8 +264,8 @@ class ChessGame {
       }
     }
 
-    // console.log(print);
-    console.log(`material score: ${this.materialScore}`);
+    console.log(print);
+    // console.log(`material score: ${this.materialScore}`);
     // console.log(`piece count: ${this.pieceCount}`);
     // for (let i = 0; i < this.pieceList.length; i++) {
     //   const pieces = ['w_pawn', 'w_khight', 'w_bishop', 'w_rook', 'w_queen', 'w_king', 'b_pawn', 'b_khight', 'b_bishop', 'b_rook', 'b_queen', 'b_king'];
@@ -390,7 +394,7 @@ class ChessGame {
     this.board[to] = piece;
     this.pieceList[piece][this.pieceCount[piece]++] = to;
     this.allPieceCount++;
-    this.materialScore += PIECE_VALUES[piece];
+    this.materialScore[ChessGame.pieceColor(piece)] += PIECE_VALUES[ChessGame.pieceType(piece)];
   }
 
   movePiece(piece: Piece, from: number, to: number) {
@@ -405,7 +409,7 @@ class ChessGame {
     this.pieceList[piece][index] = this.pieceList[piece][--this.pieceCount[piece]];
     this.pieceList[piece][this.pieceCount[piece]] = Squares.NO_SQUARE;
     this.allPieceCount--;
-    this.materialScore -= PIECE_VALUES[piece];
+    this.materialScore[ChessGame.pieceColor(piece)] -= PIECE_VALUES[ChessGame.pieceType(piece)];
   }
 
   doCastling(color: Color, from: number, to: number, revert: boolean = false): number[] {
@@ -459,7 +463,7 @@ class ChessGame {
     const captured = (moveType === MoveType.ENPASSANT) ? ChessGame.createPiece(opColor, PieceType.PAWN) : this.board[to];
     const capturedSquare = (moveType === MoveType.ENPASSANT) ? to + PAWN_MOVES[opColor].normal : to;
 
-    this.capturedPiece = captured === SquareType.EMPTY ? SquareType.EMPTY : captured;
+    this.capturedPiece = captured;
 
     this.history.push({
       prevMove: move,
@@ -790,11 +794,7 @@ class ChessGame {
     const isKing = ChessGame.pieceType(prevFromPiece) === PieceType.KING;
 
     if (to === this.epSquare) {
-      if (this.board[from] === Piece.wP) {
-        this.board[to - PAWN_MOVES[color].normal] = SquareType.EMPTY;
-      } else {
-        this.board[to + PAWN_MOVES[color].normal] = SquareType.EMPTY;
-      }
+      this.board[to - PAWN_MOVES[color].normal] = SquareType.EMPTY;
     }
 
     if (isKing) {
@@ -807,11 +807,7 @@ class ChessGame {
     const isCheck = this.isCheck();
 
     if (to === this.epSquare) {
-      if (this.board[to] === Piece.wP) {
-        this.board[to - PAWN_MOVES[color].normal] = Piece.bP;
-      } else {
-        this.board[to + PAWN_MOVES[color].normal] = Piece.wP;
-      }
+      this.board[to - PAWN_MOVES[color].normal] = ChessGame.createPiece(color ^ 1, PieceType.PAWN);
     }
 
     if (isKing) {

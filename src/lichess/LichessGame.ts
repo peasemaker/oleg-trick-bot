@@ -1,26 +1,21 @@
 import LichessApi from './LichessApi';
-import {
-  GameEventType,
-  LichessGameEvent,
-  Bot, RoomType
-} from '../types';
-import {
-  DEFAULT_POS
-} from '../constants';
+import {Bot, GameEventType, LichessGameEvent, RoomType} from '../types';
+import {Color, DEFAULT_POS} from '../constants';
+import ChessGame from '../chess/ChessGame';
 
 export default class LichessGame {
   gameId: string;
   playerId: string;
   api: LichessApi;
   bot: Bot;
-  color: 0 | 1;
+  color: Color;
 
   constructor(gameId: string, playerId: string, api: LichessApi, botType: new(...args: any[]) => Bot) {
     this.gameId = gameId;
     this.playerId = playerId;
     this.api = api;
     this.bot = new botType();
-    this.color = 0;
+    this.color = Color.WHITE;
   }
 
   start() {
@@ -36,7 +31,8 @@ export default class LichessGame {
           this.bot.loadFen(event.initialFen);
         }
 
-        this.color = event.white.id === this.playerId ? 0 : 1;
+        // @ts-ignore
+        this.color = this.bot.color = (event.white.id === this.playerId) ? Color.WHITE : Color.BLACK;
         const moves = event.state.moves === '' ? [] : event.state.moves.split(' ');
 
         if (moves.length === 0) {
@@ -62,14 +58,14 @@ export default class LichessGame {
   isTurn(moves: string[]) {
     const remainder = moves.length % 2;
 
-    return this.color === 0 ? remainder === 0 : remainder === 1;
+    return this.color === Color.WHITE ? remainder === 0 : remainder === 1;
   }
 
   playNextMove(moves: string[]) {
     if (this.isTurn(moves)) {
       const start = process.hrtime.bigint();
 
-      const nextMove = this.bot.getNextMove();
+      const nextMove = ChessGame.numericToUci(this.bot.getNextMove());
 
       const end = process.hrtime.bigint();
       console.log(`move ${nextMove} time: ${Number(end - start) / 1000000} ms`);
