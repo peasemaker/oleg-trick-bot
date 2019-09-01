@@ -12,17 +12,14 @@ export default class MinimaxBot extends ChessGame {
 
   getNextMove(): number {
     const legalMoves = this.getLegalMoves();
-    const isWhiteTurn = this.turn === Color.WHITE;
     let bestScore = -Infinity;
     let bestMove = legalMoves[Math.floor(Math.random() * legalMoves.length)];
 
     for (let i = 0; i < legalMoves.length; i++) {
       const move = legalMoves[i];
       this.makeMove(move);
-      this.printBoard();
       const moveScore = this.minimax(3);
       this.revertMove();
-      this.printBoard();
       if (moveScore > bestScore) {
         bestMove = move;
         bestScore = moveScore;
@@ -35,33 +32,23 @@ export default class MinimaxBot extends ChessGame {
     return bestMove;
   }
 
-  minimax(depth: number, isMax: boolean = true): number {
+  minimax(depth: number): number {
     if (depth === 0) {
       return this.evalMaterial();
     }
 
     const legalMoves = this.getLegalMoves();
-    let bestScore = isMax ? -Infinity : Infinity;
-
-    if (legalMoves.length === 0) {
-      if (this.isCheck(this.color)) {
-        return -Infinity;
-      } else if (this.isCheck(this.color ^ 1)) {
-        return Infinity;
-      }
-
-      return 0;
-    }
+    let bestScore = -Infinity;
 
     for (let i = 0; i < legalMoves.length; i++) {
       const move = legalMoves[i];
       this.makeMove(move);
+      const score = -this.minimax(depth - 1);
 
-      if (isMax) {
-        bestScore = Math.max(bestScore, this.minimax(depth - 1, !isMax));
-      } else {
-        bestScore = Math.min(bestScore, this.minimax(depth - 1, !isMax));
+      if (score > bestScore) {
+        bestScore = score;
       }
+
       this.revertMove();
     }
 

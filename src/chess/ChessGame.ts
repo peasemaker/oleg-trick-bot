@@ -52,7 +52,7 @@ class ChessGame {
   private zobrist: Zobrist;
 
   constructor(fen: string = DEFAULT_FEN) {
-    this.board = ChessGame.initBoard();
+    this.board = [];
     this.turn = Color.WHITE;
     this.halfMoves = 0;
     this.epSquare = Squares.NO_SQUARE;
@@ -75,7 +75,7 @@ class ChessGame {
       castlingKeys: new Array(16).fill(0).map(() => randInt64())
     };
 
-    this.loadFen(fen);
+    this.loadFen(fen, false);
   }
 
   private static initBoard(): number[] {
@@ -145,7 +145,7 @@ class ChessGame {
   }
 
   static createPromotionMove(from: number, to: number, promotion: number): number {
-    return (MoveType.PROMOTION << 14) + ((promotion - PieceType.KNIGHT) << 12) + (sq64(from) << 6) + sq64(to);
+    return (MoveType.PROMOTION << 14) + (promotion << 12) + (sq64(from) << 6) + sq64(to);
   }
 
   static createEnpassantMove(from: number, to: number): number {
@@ -194,7 +194,20 @@ class ChessGame {
     return this.turn === Color.WHITE ? ChessGame.isBlackPiece(piece) : ChessGame.isWhitePiece(piece);
   }
 
-  loadFen(fen: string) {
+  resetBoard() {
+    this.board = ChessGame.initBoard();
+    this.castlingPermission = 0;
+    this.allPieceCount = 0;
+    this.pieceCount = new Array(PIECE_NUMBER).fill(0);
+    this.pieceList = new Array(PIECE_NUMBER).fill(0).map(() => []);
+    this.positionKey = 0n;
+  }
+
+  loadFen(fen: string, needReset: boolean = true) {
+    if (needReset) {
+      this.resetBoard();
+    }
+
     const tokens = fen.split(/\s+/);
     const position = tokens[0];
     let square = 0;
@@ -250,11 +263,11 @@ class ChessGame {
       const square = this.board[sq120(i)];
 
       if (square === SquareType.EMPTY) {
-        // if (this.isSquareAttacked(sq120(i))) {
-        //   print += 'X';
-        // } else {
+        if (this.isSquareAttacked(sq120(i))) {
+          print += 'X  ';
+        } else {
         print += '.  ';
-        // }
+        }
       } else {
         print += PIECE_NOTATION[square] + '  ';
       }
@@ -638,10 +651,10 @@ class ChessGame {
             for (let i = 0; i < pawnCapturing.length; i++) {
               if (this.isEnemyPiece(this.board[sq + pawnCapturing[i]])) {
                 if (pawnRank === prePromotionRank) {
-                  moves.push(ChessGame.createPromotionMove(sq, sq + pawnCapturing[i], Promotion.n));
-                  moves.push(ChessGame.createPromotionMove(sq, sq + pawnCapturing[i], Promotion.b));
-                  moves.push(ChessGame.createPromotionMove(sq, sq + pawnCapturing[i], Promotion.r));
                   moves.push(ChessGame.createPromotionMove(sq, sq + pawnCapturing[i], Promotion.q));
+                  moves.push(ChessGame.createPromotionMove(sq, sq + pawnCapturing[i], Promotion.n));
+                  moves.push(ChessGame.createPromotionMove(sq, sq + pawnCapturing[i], Promotion.r));
+                  moves.push(ChessGame.createPromotionMove(sq, sq + pawnCapturing[i], Promotion.b));
                 } else {
                   moves.push(ChessGame.createMove(sq, sq + pawnCapturing[i]));
                 }
@@ -652,10 +665,10 @@ class ChessGame {
             }
             if (this.board[sq + pawnMove] === SquareType.EMPTY) {
               if (pawnRank === prePromotionRank) {
-                moves.push(ChessGame.createPromotionMove(sq, sq + pawnMove, Promotion.n));
-                moves.push(ChessGame.createPromotionMove(sq, sq + pawnMove, Promotion.b));
-                moves.push(ChessGame.createPromotionMove(sq, sq + pawnMove, Promotion.r));
                 moves.push(ChessGame.createPromotionMove(sq, sq + pawnMove, Promotion.q));
+                moves.push(ChessGame.createPromotionMove(sq, sq + pawnMove, Promotion.n));
+                moves.push(ChessGame.createPromotionMove(sq, sq + pawnMove, Promotion.r));
+                moves.push(ChessGame.createPromotionMove(sq, sq + pawnMove, Promotion.b));
               } else {
                 moves.push(ChessGame.createMove(sq, sq + pawnMove));
               }
@@ -792,8 +805,9 @@ class ChessGame {
     const prevFromPiece = this.board[from];
     const color = this.turn;
     const isKing = ChessGame.pieceType(prevFromPiece) === PieceType.KING;
+    const isPawn = ChessGame.pieceType(prevFromPiece) === PieceType.PAWN;
 
-    if (to === this.epSquare) {
+    if (isPawn && to === this.epSquare) {
       this.board[to - PAWN_MOVES[color].normal] = SquareType.EMPTY;
     }
 
@@ -806,7 +820,7 @@ class ChessGame {
 
     const isCheck = this.isCheck();
 
-    if (to === this.epSquare) {
+    if (isPawn && to === this.epSquare) {
       this.board[to - PAWN_MOVES[color].normal] = ChessGame.createPiece(color ^ 1, PieceType.PAWN);
     }
 

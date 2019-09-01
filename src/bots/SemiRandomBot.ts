@@ -43,6 +43,8 @@ export default class SemiRandomBot extends ChessGame {
       pickedMove = saveMoves[Math.floor(Math.random() * saveMoves.length)];
     }
 
+    console.log(pickedMove);
+
     return pickedMove;
   }
 }
