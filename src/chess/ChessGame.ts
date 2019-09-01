@@ -52,7 +52,7 @@ class ChessGame {
   private zobrist: Zobrist;
 
   constructor(fen: string = DEFAULT_FEN) {
-    this.board = [];
+    this.board = ChessGame.initBoard();
     this.turn = Color.WHITE;
     this.halfMoves = 0;
     this.epSquare = Squares.NO_SQUARE;
