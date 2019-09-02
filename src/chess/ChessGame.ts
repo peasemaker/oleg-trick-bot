@@ -263,11 +263,11 @@ class ChessGame {
       const square = this.board[sq120(i)];
 
       if (square === SquareType.EMPTY) {
-        if (this.isSquareAttacked(sq120(i))) {
-          print += 'X  ';
-        } else {
+        // if (this.isSquareAttacked(sq120(i))) {
+        //   print += 'X  ';
+        // } else {
         print += '.  ';
-        }
+        // }
       } else {
         print += PIECE_NOTATION[square] + '  ';
       }
@@ -289,6 +289,7 @@ class ChessGame {
     // console.log(`half moves: ${this.halfMoves}`);
   }
 
+  // TODO: optimization - don't check piece moves if there ara no pieces of such type
   isSquareAttacked(square: number, color?: Color): boolean {
     if (square === Squares.NO_SQUARE) {
       return false;
@@ -399,7 +400,6 @@ class ChessGame {
       this.halfMoves >= 100
       || this.isThreefoldRepetition()
       || this.isInsufficientMaterial()
-      || this.isStalemate()
     );
   }
 

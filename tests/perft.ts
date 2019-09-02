@@ -1,5 +1,5 @@
-import * as colors from 'colors/safe';
 import ChessGame from '../src/chess/ChessGame';
+import {g, m, r} from '../src/helpers';
 
 function perft(depth: number, game: ChessGame): number {
   let nodes = 0;
@@ -80,10 +80,15 @@ for (let test of tests) {
   for (let i = 0; i < nodeCounts.length; i++) {
     const testCount = perft(i + 1, game);
 
-    const status = testCount === nodeCounts[i] ? colors.green('passed') : colors.red('failed');
+    const isPassed = testCount === nodeCounts[i];
+    const status = isPassed ? g('passed') : r('failed');
 
-    console.log(`Test with fen: ${colors.bold(fen)}, depth: ${colors.bold(`${i + 1}`)} is ${status}`);
+    console.log(`Test with fen: ${m(fen)}, depth: ${m(i + 1)} is ${status}`);
+
+    if (!isPassed) {
+      break;
+    }
   }
 
-  console.log('\n');
+  console.log('');
 }

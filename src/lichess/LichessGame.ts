@@ -31,8 +31,7 @@ export default class LichessGame {
           this.bot.loadFen(event.initialFen);
         }
 
-        // @ts-ignore
-        this.color = this.bot.color = (event.white.id === this.playerId) ? Color.WHITE : Color.BLACK;
+        this.color = (event.white.id === this.playerId) ? Color.WHITE : Color.BLACK;
         const moves = event.state.moves === '' ? [] : event.state.moves.split(' ');
 
         if (moves.length === 0) {
@@ -41,13 +40,13 @@ export default class LichessGame {
         }
 
         this.bot.applyUciMoves(moves);
-        this.playNextMove(moves);
+        this.playNextMove();
         break;
       }
       case GameEventType.GAME_STATE: {
         const moves = event.moves === '' ? [] : event.moves.split(' ');
         this.bot.makeUciMove(moves[moves.length - 1]);
-        this.playNextMove(moves);
+        this.playNextMove();
         break;
       }
       default:
@@ -55,21 +54,9 @@ export default class LichessGame {
     }
   }
 
-  isTurn(moves: string[]) {
-    const remainder = moves.length % 2;
-
-    return this.color === Color.WHITE ? remainder === 0 : remainder === 1;
-  }
-
-  playNextMove(moves: string[]) {
-    if (this.isTurn(moves)) {
-      const start = process.hrtime.bigint();
-
+  playNextMove() {
+    if (this.color === this.bot.turn) {
       const nextMove = ChessGame.numericToUci(this.bot.getNextMove());
-
-      const end = process.hrtime.bigint();
-      console.log(`move ${nextMove} time: ${Number(end - start) / 1000000} ms`);
-
       this.api.makeMove(this.gameId, nextMove);
     }
   }

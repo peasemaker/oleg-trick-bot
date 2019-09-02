@@ -5,8 +5,7 @@
   "main": "src/index.ts",
   "scripts": {
     "start": "ts-node src/index.ts",
-    "perft": "ts-node tests/perft.ts",
-    "test": "echo \\\"Error: no tests specified\\\" && exit 1"
+    "perft": "ts-node tests/perft.ts"
   },
   "repository": {
     "type": "git",
