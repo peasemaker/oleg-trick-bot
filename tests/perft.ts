@@ -73,17 +73,25 @@ const tests = [
   }
 ];
 
+console.time('perft');
 for (let test of tests) {
   const { fen, nodeCounts } = test;
   const game = new ChessGame(fen);
 
   for (let i = 0; i < nodeCounts.length; i++) {
+    const start = process.hrtime.bigint();
+
     const testCount = perft(i + 1, game);
+
+    const end = process.hrtime.bigint();
 
     const isPassed = testCount === nodeCounts[i];
     const status = isPassed ? g('passed') : r('failed');
-
+    const time = Number(end - start) / 1e6;
     console.log(`Test with fen: ${m(fen)}, depth: ${m(i + 1)} is ${status}`);
+    console.log(`nodes count: ${m(testCount)}`);
+    console.log(`time: ${m(time.toFixed(3))} ms`);
+    console.log(`performance: ${m((testCount / time).toFixed(3))} kn/s`);
 
     if (!isPassed) {
       break;
@@ -92,3 +100,4 @@ for (let test of tests) {
 
   console.log('');
 }
+console.timeEnd('perft');
