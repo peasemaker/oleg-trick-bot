@@ -1,17 +1,33 @@
 import ChessGame from '../chess/ChessGame';
 import {g, m} from '../helpers';
 
+// test fen r1bqk2r/ppppbpp1/2n2n1p/1B2p3/4P3/2N2N2/PPPP1PPP/R1BQK2R b KQkq - 1 6
+
 export default class MinimaxBot extends ChessGame {
+  depth: number;
   nodesCount: number;
+  mateTime: bigint;
+  drawTime: bigint;
+  positionScoreTable: Map<bigint, {depth: number, score: number}>;
 
   constructor() {
     super();
 
+    this.depth = 5;
     this.nodesCount = 0;
+    this.mateTime = 0n;
+    this.drawTime = 0n;
+    this.positionScoreTable = new Map();
+  }
+
+  private printScore(score: number): string {
+    return Math.abs(score) >= 1e3 ? `#${score < 0 ? '-' : ''}${Math.floor((1e3 - Math.abs(score) + this.depth ) / 2) + 1}` : score.toString();
   }
 
   getNextMove(): number {
     this.nodesCount = 0;
+    this.mateTime = 0n;
+    this.drawTime = 0n;
     const start = process.hrtime.bigint();
 
     const legalMoves = this.getLegalMoves();
@@ -22,36 +38,46 @@ export default class MinimaxBot extends ChessGame {
 
     let bestScore = -1e3;
     const movesWithScore: [number, number][] = [];
+    let pickedMove, bestMoves;
 
     // console.log(legalMoves.map(m => ChessGame.numericToUci(m)).join('; '));
 
-    for (let i = 0; i < legalMoves.length; i++) {
-      const move = legalMoves[i];
-      this.makeMove(move);
-      const moveScore = -this.minimax(3, -1e3, 1e3);
-      movesWithScore.push([move, moveScore]);
-      this.revertMove();
-      if (moveScore > bestScore) {
-        bestScore = moveScore;
+    if (legalMoves.length > 1) {
+      for (let i = 0; i < legalMoves.length; i++) {
+        const move = legalMoves[i];
+        this.makeMove(move);
+        const moveScore = -this.minimax(this.depth, -Infinity, Infinity);
+        movesWithScore.push([move, moveScore]);
+        this.revertMove();
+        if (moveScore > bestScore) {
+          bestScore = moveScore;
+        }
       }
-    }
 
-    movesWithScore.sort((a, b) => b[1] - a[1]);
-    const bestMove = movesWithScore[0];
-    const bestMoves = [bestMove];
+      movesWithScore.sort((a, b) => b[1] - a[1]);
+      const bestMove = movesWithScore[0];
+      bestMoves = [bestMove];
 
-    for (let i = 1; i < movesWithScore.length; i++) {
-      if (bestMove[1] === movesWithScore[i][1]) {
-        bestMoves.push(movesWithScore[i]);
+      for (let i = 1; i < movesWithScore.length; i++) {
+        if (bestMove[1] === movesWithScore[i][1]) {
+          bestMoves.push(movesWithScore[i]);
+        }
       }
-    }
 
-    const pickedMove = bestMoves[Math.floor(Math.random() * bestMoves.length)];
+      pickedMove = bestMoves[Math.floor(Math.random() * bestMoves.length)];
+    } else {
+      bestMoves = [[legalMoves[0], 0]];
+      pickedMove = [legalMoves[0], 0];
+    }
 
     const end = process.hrtime.bigint();
     const moveTime = Number(end - start) / 1e6;
-    console.log(`best moves: ${bestMoves.map(move => `${m(ChessGame.numericToUci(move[0]))} (${g(move[1])})`).join(' ')}`);
-    console.log(`picked move: ${m(ChessGame.numericToUci(pickedMove[0]))} (${g(pickedMove[1])}); time: ${g(moveTime.toFixed(3))} ms`);
+    const mateTime = Number(this.mateTime) / 1e6;
+    const drawTime = Number(this.drawTime) / 1e6;
+    console.log(`best moves: ${bestMoves.map(move => `${m(ChessGame.numericToUci(move[0]))} (${g(this.printScore(move[1]))})`).join(' ')}`);
+    console.log(`picked move: ${m(ChessGame.numericToUci(pickedMove[0]))} (${g(this.printScore(pickedMove[1]))}); time: ${g(moveTime.toFixed(3))} ms`);
+    console.log(`mate time: ${m(mateTime.toFixed(3))} ms`);
+    console.log(`draw time: ${m(drawTime.toFixed(3))} ms`);
     console.log(`node count: ${m(this.nodesCount)}`);
     console.log(`performance: ${m((this.nodesCount / moveTime).toFixed(2))} kn/s\n`);
 
@@ -59,20 +85,34 @@ export default class MinimaxBot extends ChessGame {
   }
 
   // TODO: do not eval same positions
-  // TODO: add stalemates, checkmates and draw
   minimax(depth: number, alpha: number, beta: number): number {
     if (depth === 0) {
       this.nodesCount++;
+
+      const timestamp1 = process.hrtime.bigint();
+
+      if (this.isCheck() && !this.haveLegalMoves()) {
+        return -1e3;
+      }
+
+      this.mateTime += process.hrtime.bigint() - timestamp1;
+
+      const timestamp2 = process.hrtime.bigint();
+
+      if ((!this.isCheck() && !this.haveLegalMoves()) || this.isDraw()) {
+        return 0
+      }
+
+      this.drawTime += process.hrtime.bigint() - timestamp2;
+
       return this.evalMaterial();
     }
 
     const legalMoves = this.getLegalMoves();
 
     if (legalMoves.length === 0) {
-      if (this.isCheck(this.turn)) {
+      if (this.isCheck()) {
         return -1e3 - depth;
-      } else if (this.isCheck(this.turn ^ 1)) {
-        return 1e3 + depth;
       }
 
       return 0;
@@ -85,7 +125,17 @@ export default class MinimaxBot extends ChessGame {
     for (let i = 0; i < legalMoves.length; i++) {
       const move = legalMoves[i];
       this.makeMove(move);
-      const score = -this.minimax(depth - 1, -beta, -alpha);
+      const positionKey = this.positionKey;
+      const positionScore = this.positionScoreTable.get(positionKey);
+      let score;
+
+      if ((positionScore === undefined) || (positionScore && positionScore.depth < depth)) {
+        score = -this.minimax(depth - 1, -beta, -alpha);
+        this.positionScoreTable.set(positionKey, {depth, score});
+      } else {
+        score = positionScore.score;
+      }
+
       this.revertMove();
 
       if (score > alpha) {

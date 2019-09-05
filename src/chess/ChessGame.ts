@@ -31,6 +31,7 @@ import {
   Squares,
   SquareType
 } from '../constants';
+import {b, g, m} from '../helpers';
 
 class ChessGame {
   board: number[];
@@ -48,6 +49,7 @@ class ChessGame {
   history: GameState[];
   materialScore: number[];
 
+  private pieceIndexes: number[];
   private castlingPermissionMask: {[square in string]: number};
   private zobrist: Zobrist;
 
@@ -67,6 +69,7 @@ class ChessGame {
     this.history = [];
     this.materialScore = [0, 0];
 
+    this.pieceIndexes = new Array(120).fill(-1);
     this.castlingPermissionMask = {};
     this.zobrist = {
       pieceKeys: new Array(12).fill(0).map(() => new Array(64).fill(0).map(() => randInt64())),
@@ -196,11 +199,16 @@ class ChessGame {
 
   resetBoard() {
     this.board = ChessGame.initBoard();
+    this.halfMoves = 0;
+    this.epSquare = Squares.NO_SQUARE;
     this.castlingPermission = 0;
     this.allPieceCount = 0;
     this.pieceCount = new Array(PIECE_NUMBER).fill(0);
     this.pieceList = new Array(PIECE_NUMBER).fill(0).map(() => []);
+    this.materialScore = [0, 0];
     this.positionKey = 0n;
+    this.positionsTable = new Map<bigint, number>();
+    this.castlingPermissionMask = {};
   }
 
   loadFen(fen: string, needReset: boolean = true) {
@@ -278,68 +286,96 @@ class ChessGame {
     }
 
     console.log(print);
-    // console.log(`material score: ${this.materialScore}`);
-    // console.log(`piece count: ${this.pieceCount}`);
-    // for (let i = 0; i < this.pieceList.length; i++) {
-    //   const pieces = ['w_pawn', 'w_khight', 'w_bishop', 'w_rook', 'w_queen', 'w_king', 'b_pawn', 'b_khight', 'b_bishop', 'b_rook', 'b_queen', 'b_king'];
-    //   console.log(pieces[i], this.pieceList[i].map(sq => ChessGame.squareToLiteral(sq)));
-    // }
-    // console.log(`ep square: ${ChessGame.squareToLiteral(this.epSquare)}`);
-    // console.log(`castling permission: ${this.castlingPermission.toString(2)}`);
-    // console.log(`half moves: ${this.halfMoves}`);
+    console.log(`position key: ${m(this.positionKey.toString(16))}`);
+    console.log(`material score: ${m(this.materialScore)}`);
+    console.log(`piece count: ${m(this.pieceCount)}`);
+    for (let i = 0; i < this.pieceList.length; i++) {
+      const pieces = ['w_pawn', 'w_khight', 'w_bishop', 'w_rook', 'w_queen', 'w_king', 'b_pawn', 'b_khight', 'b_bishop', 'b_rook', 'b_queen', 'b_king'];
+      console.log(`${b(pieces[i])}: ${this.pieceList[i].map(sq => g(ChessGame.squareToLiteral(sq))).join('; ')}`);
+    }
+    console.log('piece indexes');
+    let indexesStr = '';
+    for (let i = 0; i < 64; i++) {
+      const sq = sq120(i);
+      indexesStr += `${m(ChessGame.squareToLiteral(sq))}: ${g(this.pieceIndexes[sq] === -1 ? '.' : this.pieceIndexes[sq])}  `;
+      if (i && (i + 1) % 8 === 0) {
+        indexesStr += '\n';
+      }
+    }
+    console.log(indexesStr);
+    console.log(`ep square: ${m(ChessGame.squareToLiteral(this.epSquare))}`);
+    console.log(`castling permission: ${m(this.castlingPermission.toString(2))}`);
+    console.log(`half moves: ${m(this.halfMoves)}`);
   }
 
-  // TODO: optimization - don't check piece moves if there ara no pieces of such type
   isSquareAttacked(square: number, color?: Color): boolean {
     if (square === Squares.NO_SQUARE) {
       return false;
     }
+
+    const pieceCount = this.pieceCount;
     const sideColor = color === undefined ? this.turn ^ 1 : color;
-    const [pawn, knight, bishop, rook, queen, king] = PiecesByColor[sideColor];
+    const pieces = PiecesByColor[sideColor];
+    const pawn = pieces[PieceType.PAWN];
+    const knight = pieces[PieceType.KNIGHT];
+    const bishop = pieces[PieceType.BISHOP];
+    const rook = pieces[PieceType.ROOK];
+    const queen = pieces[PieceType.QUEEN];
+    const king = pieces[PieceType.KING];
 
-    for (let i = 0; i < PAWN_CAPTURING[sideColor].length; i++) {
-      if (this.board[square - PAWN_CAPTURING[sideColor][i]] === pawn) {
-        return true;
-      }
-    }
-
-    for (let i = 0; i < KNIGHT_MOVES.length; i++) {
-      if (this.board[square + KNIGHT_MOVES[i]] === knight) {
-        return true;
-      }
-    }
-
-    for (let i = 0; i < KING_MOVES.length; i++) {
-      if (this.board[square + KING_MOVES[i]] === king) {
-        return true;
-      }
-    }
-
-    for (let i = 0; i < BISHOP_MOVES.length; i++) {
-      let sq = square + BISHOP_MOVES[i];
-      while(this.board[sq] !== SquareType.OFFBOARD) {
-        if (this.board[sq] !== SquareType.EMPTY) {
-          if (this.board[sq] === bishop || this.board[sq] === queen) {
-            return true;
-          } else {
-            break;
-          }
+    if (pieceCount[pawn] !== 0) {
+      for (let i = 0; i < PAWN_CAPTURING[sideColor].length; i++) {
+        if (this.board[square - PAWN_CAPTURING[sideColor][i]] === pawn) {
+          return true;
         }
-        sq += BISHOP_MOVES[i];
       }
     }
 
-    for (let i = 0; i < ROOK_MOVES.length; i++) {
-      let sq = square + ROOK_MOVES[i];
-      while(this.board[sq] !== SquareType.OFFBOARD) {
-        if (this.board[sq] !== SquareType.EMPTY) {
-          if (this.board[sq] === rook || this.board[sq] === queen) {
-            return true;
-          } else {
-            break;
-          }
+    if (pieceCount[knight] !== 0) {
+      for (let i = 0; i < KNIGHT_MOVES.length; i++) {
+        if (this.board[square + KNIGHT_MOVES[i]] === knight) {
+          return true;
         }
-        sq += ROOK_MOVES[i];
+      }
+    }
+
+    if (pieceCount[king] !== 0) {
+      for (let i = 0; i < KING_MOVES.length; i++) {
+        if (this.board[square + KING_MOVES[i]] === king) {
+          return true;
+        }
+      }
+    }
+
+    if (pieceCount[bishop] !== 0 || pieceCount[queen] !== 0) {
+      for (let i = 0; i < BISHOP_MOVES.length; i++) {
+        let sq = square + BISHOP_MOVES[i];
+        while (this.board[sq] !== SquareType.OFFBOARD) {
+          if (this.board[sq] !== SquareType.EMPTY) {
+            if (this.board[sq] === bishop || this.board[sq] === queen) {
+              return true;
+            } else {
+              break;
+            }
+          }
+          sq += BISHOP_MOVES[i];
+        }
+      }
+    }
+
+    if (pieceCount[rook] !== 0 || pieceCount[queen] !== 0) {
+      for (let i = 0; i < ROOK_MOVES.length; i++) {
+        let sq = square + ROOK_MOVES[i];
+        while (this.board[sq] !== SquareType.OFFBOARD) {
+          if (this.board[sq] !== SquareType.EMPTY) {
+            if (this.board[sq] === rook || this.board[sq] === queen) {
+              return true;
+            } else {
+              break;
+            }
+          }
+          sq += ROOK_MOVES[i];
+        }
       }
     }
 
@@ -375,15 +411,26 @@ class ChessGame {
     ) {
       return true;
     } else if (this.pieceCount[Piece.wB] + this.pieceCount[Piece.bB] === this.allPieceCount - 2) {
-      const whiteBishops = this.pieceList[Piece.wB].filter(sq => sq !== Squares.NO_SQUARE);
-      const blackBishops = this.pieceList[Piece.bB].filter(sq => sq !== Squares.NO_SQUARE);
-      const firstBishop = whiteBishops.length > 0 ? whiteBishops[0] : blackBishops[0];
+      const whiteBishops = this.pieceList[Piece.wB];
+      const blackBishops = this.pieceList[Piece.bB];
+      const whiteBishopsCount = this.pieceCount[Piece.wB];
+      const blackBishopsCount = this.pieceCount[Piece.bB];
+      const firstBishop = whiteBishopsCount > 0 ? whiteBishops[0] : blackBishops[0];
       const firstBishopColor = SQUARE_COLOR[firstBishop];
 
-      return (
-        whiteBishops.every(bishopSquare => SQUARE_COLOR[bishopSquare] === firstBishopColor)
-        && blackBishops.every(bishopSquare => SQUARE_COLOR[bishopSquare] === firstBishopColor)
-      );
+      for (let i = 0; i < whiteBishopsCount; i++) {
+        if (firstBishopColor !== SQUARE_COLOR[whiteBishops[i]]) {
+          return false;
+        }
+      }
+
+      for (let i = 0; i < blackBishopsCount; i++) {
+        if (firstBishopColor !== SQUARE_COLOR[blackBishops[i]]) {
+          return false;
+        }
+      }
+
+      return true;
     }
 
     return false;
@@ -398,14 +445,15 @@ class ChessGame {
   isDraw(): boolean {
     return (
       this.halfMoves >= 100
-      || this.isThreefoldRepetition()
       || this.isInsufficientMaterial()
+      || this.isThreefoldRepetition()
     );
   }
 
   putPiece(piece: Piece, to: number) {
     this.board[to] = piece;
-    this.pieceList[piece][this.pieceCount[piece]++] = to;
+    this.pieceIndexes[to] = this.pieceCount[piece]++;
+    this.pieceList[piece][this.pieceIndexes[to]] = to;
     this.allPieceCount++;
     this.materialScore[ChessGame.pieceColor(piece)] += PIECE_VALUES[ChessGame.pieceType(piece)];
   }
@@ -413,14 +461,17 @@ class ChessGame {
   movePiece(piece: Piece, from: number, to: number) {
     this.board[from] = SquareType.EMPTY;
     this.board[to] = piece;
-    const index = this.pieceList[piece].indexOf(from);
-    this.pieceList[piece][index] = to;
+    this.pieceIndexes[to] = this.pieceIndexes[from];
+    this.pieceIndexes[from] = -1;
+    this.pieceList[piece][this.pieceIndexes[to]] = to;
   }
 
   removePiece(piece: Piece, from: number) {
-    const index = this.pieceList[piece].indexOf(from);
-    this.pieceList[piece][index] = this.pieceList[piece][--this.pieceCount[piece]];
+    const lastSquare = this.pieceList[piece][--this.pieceCount[piece]];
+    this.pieceList[piece][this.pieceIndexes[from]] = lastSquare;
     this.pieceList[piece][this.pieceCount[piece]] = Squares.NO_SQUARE;
+    this.pieceIndexes[lastSquare] = this.pieceIndexes[from];
+    this.pieceIndexes[from] = -1;
     this.allPieceCount--;
     this.materialScore[ChessGame.pieceColor(piece)] -= PIECE_VALUES[ChessGame.pieceType(piece)];
   }
@@ -635,7 +686,13 @@ class ChessGame {
     const isWTurn = color === Color.WHITE;
     const longMoveRank = isWTurn ? Ranks.RANK_2 : Ranks.RANK_7;
     const prePromotionRank = isWTurn ? Ranks.RANK_7 : Ranks.RANK_2;
-    const [pawn, knight, bishop, rook, queen, king] = PiecesByColor[this.turn];
+    const pieces = PiecesByColor[color];
+    const pawn = pieces[PieceType.PAWN];
+    const knight = pieces[PieceType.KNIGHT];
+    const bishop = pieces[PieceType.BISHOP];
+    const rook = pieces[PieceType.ROOK];
+    const queen = pieces[PieceType.QUEEN];
+    const king = pieces[PieceType.KING];
 
     for (let p = 0; p < PIECE_NUMBER; p++) {
       for (let i = 0, squares = this.pieceList[p]; i < squares.length; i++) {
@@ -798,6 +855,18 @@ class ChessGame {
     return legalMoves;
   }
 
+  haveLegalMoves(): boolean {
+    const pseudoLegalMoves = this.getPseudoLegalMoves();
+
+    for (let i = 0, l = pseudoLegalMoves.length; i < l; i++) {
+      if (this.isMoveLegal(pseudoLegalMoves[i])) {
+        return true
+      }
+    }
+
+    return false;
+  }
+
   isMoveLegal(move: number): boolean {
     const to = sq120(move & 63);
     const from = sq120(move >> 6 & 63);
@@ -812,11 +881,15 @@ class ChessGame {
     }
 
     if (isKing) {
-      this.movePiece(prevFromPiece, from, to);
-    }
+      if (prevToPiece !== SquareType.EMPTY) {
+        this.removePiece(prevToPiece, to);
+      }
 
-    this.board[from] = SquareType.EMPTY;
-    this.board[to] = prevFromPiece;
+      this.movePiece(prevFromPiece, from, to);
+    } else {
+      this.board[from] = SquareType.EMPTY;
+      this.board[to] = prevFromPiece;
+    }
 
     const isCheck = this.isCheck();
 
@@ -826,10 +899,14 @@ class ChessGame {
 
     if (isKing) {
       this.movePiece(prevFromPiece, to, from);
-    }
 
-    this.board[from] = prevFromPiece;
-    this.board[to] = prevToPiece;
+      if (prevToPiece !== SquareType.EMPTY) {
+        this.putPiece(prevToPiece, to);
+      }
+    } else {
+      this.board[from] = prevFromPiece;
+      this.board[to] = prevToPiece;
+    }
 
     return !isCheck;
   }

@@ -9,7 +9,7 @@ import {
 } from '../types';
 
 const token = '3LBpuFgvWMF74HgB';
-const whiteList = ['victorinthesky', 'droooney', 'tonygbotdev'];
+const whiteList = ['victorinthesky', 'droooney', 'tonygbotdev', 'tonygbot'];
 
 export default class LichessBot {
   api: LichessApi;

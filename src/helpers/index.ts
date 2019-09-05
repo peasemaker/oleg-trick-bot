@@ -11,3 +11,7 @@ export function g(text: any) {
 export function r(text: any) {
   return colors.red(text.toString());
 }
+
+export function b(text: any) {
+  return colors.blue(text.toString());
+}
