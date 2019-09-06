@@ -1,8 +1,6 @@
 import ChessGame from '../chess/ChessGame';
 import {g, m} from '../helpers';
 
-// test fen r1bqk2r/ppppbpp1/2n2n1p/1B2p3/4P3/2N2N2/PPPP1PPP/R1BQK2R b KQkq - 1 6
-
 export default class MinimaxBot extends ChessGame {
   depth: number;
   nodesCount: number;
@@ -13,7 +11,7 @@ export default class MinimaxBot extends ChessGame {
   constructor() {
     super();
 
-    this.depth = 5;
+    this.depth = 3;
     this.nodesCount = 0;
     this.mateTime = 0n;
     this.drawTime = 0n;
@@ -36,9 +34,9 @@ export default class MinimaxBot extends ChessGame {
       return 0;
     }
 
-    let bestScore = -1e3;
     const movesWithScore: [number, number][] = [];
     let pickedMove, bestMoves;
+    let alpha = -Infinity;
 
     // console.log(legalMoves.map(m => ChessGame.numericToUci(m)).join('; '));
 
@@ -46,11 +44,11 @@ export default class MinimaxBot extends ChessGame {
       for (let i = 0; i < legalMoves.length; i++) {
         const move = legalMoves[i];
         this.makeMove(move);
-        const moveScore = -this.minimax(this.depth, -Infinity, Infinity);
+        const moveScore = -this.minimax(this.depth, -Infinity, -alpha);
         movesWithScore.push([move, moveScore]);
         this.revertMove();
-        if (moveScore > bestScore) {
-          bestScore = moveScore;
+        if (moveScore > alpha) {
+          alpha = moveScore;
         }
       }
 
@@ -138,12 +136,12 @@ export default class MinimaxBot extends ChessGame {
 
       this.revertMove();
 
-      if (score > alpha) {
-        alpha = score;
+      if (score >= beta) {
+        return beta;
       }
 
-      if (alpha >= beta) {
-        break;
+      if (score > alpha) {
+        alpha = score;
       }
     }
 
