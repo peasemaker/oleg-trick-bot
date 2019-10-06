@@ -7,6 +7,8 @@ export default class MinimaxBot extends ChessGame {
   mateTime: bigint;
   drawTime: bigint;
   positionScoreTable: Map<bigint, {depth: number, score: number}>;
+  firstCutNodesCount: number;
+  cutNodesCount: number;
 
   constructor() {
     super();
@@ -16,6 +18,8 @@ export default class MinimaxBot extends ChessGame {
     this.mateTime = 0n;
     this.drawTime = 0n;
     this.positionScoreTable = new Map();
+    this.firstCutNodesCount = 0;
+    this.cutNodesCount = 0;
   }
 
   private printScore(score: number): string {
@@ -44,7 +48,7 @@ export default class MinimaxBot extends ChessGame {
       for (let i = 0; i < legalMoves.length; i++) {
         const move = legalMoves[i];
         this.makeMove(move);
-        const moveScore = -this.minimax(this.depth, -Infinity, -alpha);
+        const moveScore = -this.minimax(this.depth, -Infinity, -alpha + 0.05);
         movesWithScore.push([move, moveScore]);
         this.revertMove();
         if (moveScore > alpha) {
@@ -77,7 +81,9 @@ export default class MinimaxBot extends ChessGame {
     console.log(`mate time: ${m(mateTime.toFixed(3))} ms`);
     console.log(`draw time: ${m(drawTime.toFixed(3))} ms`);
     console.log(`node count: ${m(this.nodesCount)}`);
-    console.log(`performance: ${m((this.nodesCount / moveTime).toFixed(2))} kn/s\n`);
+    console.log(`performance: ${m((this.nodesCount / moveTime).toFixed(2))} kn/s`);
+    console.log(`move ordering quality: ${m(Math.round(100 * this.firstCutNodesCount / this.cutNodesCount))} %`);
+    console.log('');
 
     return pickedMove[0];
   }
@@ -123,20 +129,16 @@ export default class MinimaxBot extends ChessGame {
     for (let i = 0; i < legalMoves.length; i++) {
       const move = legalMoves[i];
       this.makeMove(move);
-      const positionKey = this.positionKey;
-      const positionScore = this.positionScoreTable.get(positionKey);
-      let score;
-
-      if ((positionScore === undefined) || (positionScore && positionScore.depth < depth)) {
-        score = -this.minimax(depth - 1, -beta, -alpha);
-        this.positionScoreTable.set(positionKey, {depth, score});
-      } else {
-        score = positionScore.score;
-      }
+      const score = -this.minimax(depth - 1, -beta, -alpha);
 
       this.revertMove();
 
       if (score >= beta) {
+        if (i === 0) {
+          this.firstCutNodesCount++;
+        }
+
+        this.cutNodesCount++;
         return beta;
       }
 

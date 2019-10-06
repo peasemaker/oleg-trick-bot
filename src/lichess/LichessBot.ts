@@ -7,8 +7,12 @@ import {
   RoomType,
   Bot
 } from '../types';
+import {m} from '../helpers';
+import * as dotenv from 'dotenv';
+dotenv.config();
 
-const token = '3LBpuFgvWMF74HgB';
+const token = process.env.TOKEN!;
+
 const whiteList = ['victorinthesky', 'droooney', 'tonygbotdev', 'tonygbot'];
 
 export default class LichessBot {
@@ -26,6 +30,8 @@ export default class LichessBot {
     const account = await this.api.getAccountInfo();
     this.accountId = account.id;
     this.api.streamLobby((event) => this.challengeEventListener(event));
+
+    console.log(m('Bot is started!'));
   }
 
   challengeEventListener(event: LichessLobbyEvent) {
