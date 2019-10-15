@@ -48,6 +48,9 @@ class ChessGame {
   positionsTable: Map<bigint, number>;
   history: GameState[];
   materialScore: number[];
+  isInCheck: boolean;
+  isInDoubleCheck: boolean;
+  checkingPieceSquare: number;
 
   private pieceIndexes: number[];
   private castlingPermissionMask: {[square in string]: number};
@@ -68,6 +71,10 @@ class ChessGame {
     this.positionsTable = new Map<bigint, number>();
     this.history = [];
     this.materialScore = [0, 0];
+    this.isInCheck = false;
+    // TODO: add initialization in loadFen
+    this.isInDoubleCheck = false;
+    this.checkingPieceSquare = Squares.NO_SQUARE;
 
     this.pieceIndexes = new Array(120).fill(-1);
     this.castlingPermissionMask = {};
@@ -262,6 +269,8 @@ class ChessGame {
     }
 
     this.positionsTable.set(this.positionKey, 1);
+
+    this.isInCheck = this.isCheck();
   }
 
   printBoard() {
@@ -377,6 +386,82 @@ class ChessGame {
           sq += ROOK_MOVES[i];
         }
       }
+    }
+
+    return false;
+  }
+
+  isSquareAttackedByPiece(square: number, piece: number): boolean {
+    const color = this.turn;
+    const sideColor = color === undefined ? this.turn ^ 1 : color;
+
+    switch(ChessGame.pieceType(piece)) {
+      case PieceType.PAWN:
+        for (let i = 0; i < PAWN_CAPTURING[sideColor].length; i++) {
+          if (this.board[square - PAWN_CAPTURING[sideColor][i]] === piece) {
+            return true;
+          }
+        }
+        break;
+      case PieceType.KNIGHT:
+        for (let i = 0; i < KNIGHT_MOVES.length; i++) {
+          if (this.board[square + KNIGHT_MOVES[i]] === piece) {
+            return true;
+          }
+        }
+        break;
+      case PieceType.BISHOP:
+        for (let i = 0; i < BISHOP_MOVES.length; i++) {
+          let sq = square + BISHOP_MOVES[i];
+          while (this.board[sq] !== SquareType.OFFBOARD) {
+            if (this.board[sq] !== SquareType.EMPTY) {
+              if (this.board[sq] === piece) {
+                return true;
+              } else {
+                break;
+              }
+            }
+            sq += BISHOP_MOVES[i];
+          }
+        }
+        break;
+      case PieceType.ROOK:
+        for (let i = 0; i < ROOK_MOVES.length; i++) {
+          let sq = square + ROOK_MOVES[i];
+          while (this.board[sq] !== SquareType.OFFBOARD) {
+            if (this.board[sq] !== SquareType.EMPTY) {
+              if (this.board[sq] === piece) {
+                return true;
+              } else {
+                break;
+              }
+            }
+            sq += ROOK_MOVES[i];
+          }
+        }
+        break;
+      case PieceType.QUEEN:
+        for (let i = 0; i < QUEEN_MOVES.length; i++) {
+          let sq = square + ROOK_MOVES[i];
+          while (this.board[sq] !== SquareType.OFFBOARD) {
+            if (this.board[sq] !== SquareType.EMPTY) {
+              if (this.board[sq] === piece) {
+                return true;
+              } else {
+                break;
+              }
+            }
+            sq += QUEEN_MOVES[i];
+          }
+        }
+        break;
+      case PieceType.KING:
+        for (let i = 0; i < KING_MOVES.length; i++) {
+          if (this.board[square + KING_MOVES[i]] === piece) {
+            return true;
+          }
+        }
+        break;
     }
 
     return false;
@@ -521,11 +606,16 @@ class ChessGame {
     const from = sq120(move >> 6 & 63);
     const promotion = move >> 12 & 3;
     const moveType = move >> 14;
-    const piece = this.board[from];
+    const movedPiece = this.board[from];
+    const movedPieceType = ChessGame.pieceType(movedPiece);
     const color = this.turn;
     const opColor = color ^ 1;
     const captured = (moveType === MoveType.ENPASSANT) ? ChessGame.createPiece(opColor, PieceType.PAWN) : this.board[to];
     const capturedSquare = (moveType === MoveType.ENPASSANT) ? to + PAWN_MOVES[opColor].normal : to;
+    const opKing  = opColor === Color.WHITE ? Piece.wK : Piece.bK;
+    const opKingSquare = this.pieceList[opKing][0];
+    let checkingPieceSquare = to;
+    let checkingPiece = movedPiece;
 
     this.capturedPiece = captured;
 
@@ -545,9 +635,9 @@ class ChessGame {
     }
 
     this.halfMoves++;
-    this.movedPiece = piece;
+    this.movedPiece = movedPiece;
 
-    this.positionKey ^= this.zobrist.pieceKeys[piece][sq64(from)] ^ this.zobrist.pieceKeys[piece][sq64(to)];
+    this.positionKey ^= this.zobrist.pieceKeys[movedPiece][sq64(from)] ^ this.zobrist.pieceKeys[movedPiece][sq64(to)];
 
     if (captured !== SquareType.EMPTY) {
       this.removePiece(captured, capturedSquare);
@@ -557,32 +647,35 @@ class ChessGame {
 
     if (moveType === MoveType.PROMOTION) {
       const promotionPiece = ChessGame.createPiece(color, promotion + PieceType.KNIGHT);
-      this.removePiece(piece, from);
+      checkingPiece = promotionPiece;
+      this.removePiece(movedPiece, from);
       this.putPiece(promotionPiece, to);
       this.board[from] = SquareType.EMPTY;
-      this.positionKey ^= this.zobrist.pieceKeys[piece][sq64(to)] ^ this.zobrist.pieceKeys[promotionPiece][sq64(to)];
+      this.positionKey ^= this.zobrist.pieceKeys[movedPiece][sq64(to)] ^ this.zobrist.pieceKeys[promotionPiece][sq64(to)];
     } else if (moveType === MoveType.CASTLING) {
       const [rookFrom, rookTo] = this.doCastling(color, from, to);
       const rook = ChessGame.createPiece(color, PieceType.ROOK);
+      checkingPiece = rook;
+      checkingPieceSquare = rookTo;
       this.positionKey ^= this.zobrist.pieceKeys[rook][sq64(rookFrom)] ^ this.zobrist.pieceKeys[rook][sq64(rookTo)];
     } else if (moveType === MoveType.ENPASSANT) {
-      this.movePiece(piece, from, to);
+      this.movePiece(movedPiece, from, to);
       this.board[capturedSquare] = SquareType.EMPTY;
       this.positionKey ^= this.zobrist.pieceKeys[captured][sq64(capturedSquare)];
     } else {
       if (
         Math.abs(from - to) === Math.abs(PAWN_MOVES[color].advanced)
-        && ((piece === Piece.wP && (this.board[to - 1] === Piece.bP || this.board[to + 1] === Piece.bP))
-        || (piece === Piece.bP && (this.board[to - 1] === Piece.wP || this.board[to + 1] === Piece.wP)))
+        && ((movedPiece === Piece.wP && (this.board[to - 1] === Piece.bP || this.board[to + 1] === Piece.bP))
+        || (movedPiece === Piece.bP && (this.board[to - 1] === Piece.wP || this.board[to + 1] === Piece.wP)))
       ) {
         this.epSquare = from + PAWN_MOVES[color].normal;
         this.positionKey ^= this.zobrist.epKeys[ChessGame.file(this.epSquare)];
       }
 
-      this.movePiece(piece, from, to);
+      this.movePiece(movedPiece, from, to);
     }
 
-    if (ChessGame.pieceType(piece) === PieceType.PAWN) {
+    if (movedPieceType === PieceType.PAWN) {
       this.halfMoves = 0;
     }
 
@@ -602,6 +695,127 @@ class ChessGame {
     } else {
       this.positionsTable.set(this.positionKey, 1);
     }
+
+    const opKingRank = ChessGame.rank(opKingSquare);
+    const opKingFile = ChessGame.file(opKingSquare);
+    const toRank = ChessGame.rank(checkingPieceSquare);
+    const toFile = ChessGame.file(checkingPieceSquare);
+    const checkingPieceType = ChessGame.pieceType(checkingPiece);
+
+    if (checkingPieceType === PieceType.KNIGHT) {
+      this.isInCheck = KNIGHT_MOVES.includes(opKingSquare - checkingPieceSquare);
+    } else if (checkingPieceType === PieceType.PAWN) {
+      this.isInCheck = PAWN_CAPTURING[color].includes(opKingSquare - checkingPieceSquare);
+    } else if (checkingPieceType !== PieceType.KING) {
+      let dir = 0;
+      let isDiagonal = false;
+
+      if (opKingRank === toRank) {
+        dir = (checkingPieceSquare - opKingSquare) / Math.abs(toFile - opKingFile);
+      } else if (opKingFile === toFile) {
+        dir = (checkingPieceSquare - opKingSquare) / Math.abs(toRank - opKingRank);
+      } else if (Math.abs(toRank - opKingRank) === Math.abs(toFile - opKingFile)) {
+        dir = (checkingPieceSquare - opKingSquare) / Math.abs(toRank - opKingRank);
+        isDiagonal = true;
+      }
+
+      if (dir) {
+        let sq = opKingSquare + dir;
+        while (this.board[sq] !== SquareType.OFFBOARD) {
+          const piece = this.board[sq];
+          const pieceColor = ChessGame.pieceColor(piece);
+          const pieceType = ChessGame.pieceType(piece);
+          if (piece !== SquareType.EMPTY) {
+            this.isInCheck = pieceColor === color
+              && (pieceType === (isDiagonal ? PieceType.BISHOP : PieceType.ROOK) || pieceType === PieceType.QUEEN);
+            break;
+          }
+          sq += dir;
+        }
+      }
+    }
+
+    if (this.isInCheck) {
+      this.checkingPieceSquare = checkingPieceSquare;
+    } else if (moveType === MoveType.ENPASSANT) {
+      const capturedRank = ChessGame.rank(capturedSquare);
+      const capturedFile = ChessGame.file(capturedSquare);
+
+      if (Math.abs(capturedRank - opKingRank) === Math.abs(capturedFile - opKingFile)) {
+        const dir = (capturedSquare - opKingSquare) / Math.abs(capturedRank - opKingRank);
+
+
+        let sq = opKingSquare + dir;
+        while (this.board[sq] !== SquareType.OFFBOARD) {
+          const piece = this.board[sq];
+          const pieceColor = ChessGame.pieceColor(piece);
+          const pieceType = ChessGame.pieceType(piece);
+          if (piece !== SquareType.EMPTY) {
+            this.isInCheck = pieceColor === color
+              && (pieceType === PieceType.BISHOP || pieceType === PieceType.QUEEN);
+            break;
+          }
+          sq += dir;
+        }
+
+        if (this.isInCheck) {
+          this.checkingPieceSquare = sq;
+        }
+      }
+    }
+
+    if (moveType !== MoveType.CASTLING && movedPieceType !== PieceType.QUEEN) {
+      const fromRank = ChessGame.rank(from);
+      const fromFile = ChessGame.file(from);
+      const toRank = ChessGame.rank(to);
+      const toFile = ChessGame.file(to);
+
+      let dir = 0;
+      let isDiagonal = false;
+      let isDiscoveredCheck = false;
+
+      if (movedPieceType !== PieceType.ROOK) {
+        if (toRank !== fromRank && opKingRank === fromRank) {
+          dir = (from - opKingSquare) / Math.abs(fromFile - opKingFile);
+        } else if (toFile !== fromFile && opKingFile === fromFile) {
+          dir = (from - opKingSquare) / Math.abs(fromRank - opKingRank);
+        }
+      }
+
+      if (
+        movedPieceType !== PieceType.BISHOP
+        && (fromRank - toRank) * (fromFile - opKingFile) !== (fromRank - opKingRank) * (fromFile - toFile)
+        && Math.abs(opKingRank - fromRank) === Math.abs(opKingFile - fromFile)
+      ) {
+        dir = (from - opKingSquare) / Math.abs(fromRank - opKingRank);
+        isDiagonal = true;
+      }
+
+      let sq = opKingSquare + dir;
+      if (dir) {
+        while (this.board[sq] !== SquareType.OFFBOARD) {
+          const piece = this.board[sq];
+          const pieceColor = ChessGame.pieceColor(piece);
+          const pieceType = ChessGame.pieceType(piece);
+          if (piece !== SquareType.EMPTY) {
+            isDiscoveredCheck = pieceColor === color
+                && (pieceType === (isDiagonal ? PieceType.BISHOP : PieceType.ROOK) || pieceType === PieceType.QUEEN);
+            break;
+          }
+          sq += dir;
+        }
+      }
+
+      if (this.isInCheck) {
+        this.isInDoubleCheck = isDiscoveredCheck;
+      } else {
+        this.isInCheck = isDiscoveredCheck;
+        this.checkingPieceSquare = sq;
+      }
+    }
+
+    console.log('isInCheck', this.isInCheck);
+    console.log('isInDoubleCheck', this.isInDoubleCheck);
 
     // console.log('after: ', ChessGame.numericToUci(move));
     // this.printBoard();
@@ -700,6 +914,10 @@ class ChessGame {
 
         if (sq === Squares.NO_SQUARE) {
           break;
+        }
+
+        if (this.isInDoubleCheck && p !== king) {
+          continue;
         }
 
         switch (p) {
