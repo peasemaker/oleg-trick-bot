@@ -1,5 +1,4 @@
 import ChessGame from './chess/ChessGame';
-import {sq120} from './constants';
 import LichessBot from './lichess/LichessBot';
 import MinimaxBot from './bots/MinimaxBot';
 

@@ -1,6 +1,7 @@
 import LichessApi from './LichessApi';
 import {Bot, GameEventType, LichessGameEvent, RoomType} from '../types';
-import {Color, DEFAULT_POS} from '../constants';
+import {DEFAULT_POS} from '../constants/lichessContacts';
+import {Color} from '../constants/chessGameConstants';
 import ChessGame from '../chess/ChessGame';
 
 export default class LichessGame {
