@@ -6,6 +6,7 @@ import {
   LichessLobbyEvent,
   RoomType
 } from '../types';
+import {m} from '../helpers';
 
 export default class LichessApi {
   baseUrl: string;
@@ -57,15 +58,15 @@ export default class LichessApi {
     return this.post(`/api/bot/game/${gameId}/resign`);
   }
 
-  streamLobby(cb: (event: LichessLobbyEvent) => void) {
-    return this.createStream<LichessLobbyEvent>('/api/stream/event', cb);
+  streamLobby(cb: (event: LichessLobbyEvent) => void, onEnd?: () => void) {
+    return this.createStream<LichessLobbyEvent>('/api/stream/event', cb, onEnd);
   }
 
-  streamGame(gameId: string, cb: (event: LichessGameEvent) => void) {
-    return this.createStream<LichessGameEvent>(`/api/bot/game/stream/${gameId}`, cb);
+  streamGame(gameId: string, cb: (event: LichessGameEvent) => void, onEnd?: () => void) {
+    return this.createStream<LichessGameEvent>(`/api/bot/game/stream/${gameId}`, cb, onEnd);
   }
 
-  async createStream<T>(path: string, cb: (event: T) => void) {
+  async createStream<T>(path: string, cb: (event: T) => void, onEnd?: () => void) {
     const response = await this.simpleRequest(path, 'get');
     let prevData = '';
 
@@ -92,7 +93,14 @@ export default class LichessApi {
     });
 
     response.on('end', () => {
-      console.log('stream is ended!');
+      console.log(m('*****************'));
+
+      if (onEnd) {
+        onEnd();
+      }
+
+      console.log(m('stream is ended!'));
+      console.log(m('*****************'));
     });
   }
 

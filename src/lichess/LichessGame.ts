@@ -3,6 +3,8 @@ import {Bot, GameEventType, LichessGameEvent, RoomType} from '../types';
 import {DEFAULT_POS} from '../constants/lichessContacts';
 import {Color} from '../constants/chessGameConstants';
 import ChessGame from '../chess/ChessGame';
+import {g, m} from '../helpers';
+import MinimaxBot from '../bots/MinimaxBot';
 
 export default class LichessGame {
   gameId: string;
@@ -20,7 +22,15 @@ export default class LichessGame {
   }
 
   start() {
-    this.api.streamGame(this.gameId, (event) => this.gameEventListener(event));
+    const onGameEnd = () => {
+      if (this.bot instanceof MinimaxBot) {
+        const averagePerformace = this.bot.performances.reduce((a, b) => a + b, 0) / this.bot.performances.length;
+        console.log(`average performance: ${m(averagePerformace.toFixed(2))} kn/s`);
+        console.log(`max performance: ${m(this.bot.maxPerformance)} kn/s`)
+      }
+    };
+
+    this.api.streamGame(this.gameId, (event) => this.gameEventListener(event), onGameEnd);
   }
 
   gameEventListener(event: LichessGameEvent) {
@@ -36,7 +46,9 @@ export default class LichessGame {
         const moves = event.state.moves === '' ? [] : event.state.moves.split(' ');
 
         if (moves.length === 0) {
-          console.log(`Game ${this.gameId} started!`);
+          console.log(m('*****************'));
+          console.log(m(`Game ${g(this.gameId)} started!`));
+          console.log(m('*****************'));
           this.api.sendMessage(this.gameId, RoomType.PLAYER, 'Hello! I am Oleg!');
         }
 

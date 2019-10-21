@@ -4,22 +4,22 @@ import {g, m} from '../helpers';
 export default class MinimaxBot extends ChessGame {
   depth: number;
   nodesCount: number;
-  mateTime: bigint;
-  drawTime: bigint;
   positionScoreTable: Map<bigint, {depth: number, score: number}>;
   firstCutNodesCount: number;
   cutNodesCount: number;
+  performances: number[];
+  maxPerformance: number;
 
   constructor() {
     super();
 
     this.depth = 3;
     this.nodesCount = 0;
-    this.mateTime = 0n;
-    this.drawTime = 0n;
     this.positionScoreTable = new Map();
     this.firstCutNodesCount = 0;
     this.cutNodesCount = 0;
+    this.performances = [];
+    this.maxPerformance = -Infinity;
   }
 
   private printScore(score: number): string {
@@ -28,8 +28,6 @@ export default class MinimaxBot extends ChessGame {
 
   getNextMove(): number {
     this.nodesCount = 0;
-    this.mateTime = 0n;
-    this.drawTime = 0n;
     const start = process.hrtime.bigint();
 
     const legalMoves = this.getLegalMoves();
@@ -74,14 +72,19 @@ export default class MinimaxBot extends ChessGame {
 
     const end = process.hrtime.bigint();
     const moveTime = Number(end - start) / 1e6;
-    const mateTime = Number(this.mateTime) / 1e6;
-    const drawTime = Number(this.drawTime) / 1e6;
     console.log(`best moves: ${bestMoves.map(move => `${m(ChessGame.numericToUci(move[0]))} (${g(this.printScore(move[1]))})`).join(' ')}`);
     console.log(`picked move: ${m(ChessGame.numericToUci(pickedMove[0]))} (${g(this.printScore(pickedMove[1]))}); time: ${g(moveTime.toFixed(3))} ms`);
-    console.log(`mate time: ${m(mateTime.toFixed(3))} ms`);
-    console.log(`draw time: ${m(drawTime.toFixed(3))} ms`);
     console.log(`node count: ${m(this.nodesCount)}`);
-    console.log(`performance: ${m((this.nodesCount / moveTime).toFixed(2))} kn/s`);
+
+    const performance = +(this.nodesCount / moveTime).toFixed(2);
+
+    if (performance) {
+      this.performances.push(performance);
+    }
+
+    this.maxPerformance = Math.max(this.maxPerformance, performance);
+
+    console.log(`performance: ${m(performance)} kn/s`);
     console.log(`move ordering quality: ${m(Math.round(100 * this.firstCutNodesCount / this.cutNodesCount))} %`);
     console.log('');
 

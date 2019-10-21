@@ -31,7 +31,9 @@ export default class LichessBot {
     this.accountId = account.id;
     this.api.streamLobby((event) => this.challengeEventListener(event));
 
+    console.log(m('*****************'));
     console.log(m('Bot is started!'));
+    console.log(m('*****************'));
   }
 
   challengeEventListener(event: LichessLobbyEvent) {
