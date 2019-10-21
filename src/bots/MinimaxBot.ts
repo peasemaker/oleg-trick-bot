@@ -93,21 +93,15 @@ export default class MinimaxBot extends ChessGame {
     if (depth === 0) {
       this.nodesCount++;
 
-      const timestamp1 = process.hrtime.bigint();
+      const isInCheck = this.isCheck();
 
-      if (this.isCheck() && !this.haveLegalMoves()) {
+      if (isInCheck && !this.haveLegalMoves()) {
         return -1e3;
       }
 
-      this.mateTime += process.hrtime.bigint() - timestamp1;
-
-      const timestamp2 = process.hrtime.bigint();
-
-      if ((!this.isCheck() && !this.haveLegalMoves()) || this.isDraw()) {
+      if ((!isInCheck && !this.haveLegalMoves()) || this.isDraw()) {
         return 0
       }
-
-      this.drawTime += process.hrtime.bigint() - timestamp2;
 
       return this.evalMaterial();
     }
