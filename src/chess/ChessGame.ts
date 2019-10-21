@@ -176,6 +176,93 @@ class ChessGame {
     return from + to + promotionUci;
   }
 
+  static isVertical(dir: number): boolean {
+    return dir === ROOK_MOVES[0] || dir === ROOK_MOVES[3];
+  }
+
+  static isHorizontal(dir: number): boolean {
+    return dir === ROOK_MOVES[1] || dir === ROOK_MOVES[2];
+  }
+
+  static isOrthogonal(dir: number): boolean {
+    return ChessGame.isHorizontal(dir) || ChessGame.isVertical(dir);
+  }
+
+  static isDiagonal(dir: number): boolean {
+    return BISHOP_MOVES.includes(dir);
+  }
+
+  static getDirection(sq1: number, sq2: number): number {
+    const rank1 = ChessGame.rank(sq1);
+    const file1 = ChessGame.file(sq1);
+    const rank2 = ChessGame.rank(sq2);
+    const file2 = ChessGame.file(sq2);
+
+    if (rank1 === rank2) {
+      return (sq2 - sq1) / Math.abs(file2 - file1);
+    } else if (file1 === file2) {
+      return (sq2 - sq1) / Math.abs(rank2 - rank1);
+    } else if (Math.abs(rank2 - rank1) === Math.abs(file2 - file1)) {
+      return (sq2 - sq1) / Math.abs(rank2 - rank1);
+    }
+
+    return 0;
+  }
+
+  static isSquareBetween(startSq: number, endSq: number, betweenSq: number): boolean {
+    const dirStartToBetween = ChessGame.getDirection(startSq, betweenSq);
+    const dirEndToBetween = ChessGame.getDirection(endSq, betweenSq);
+
+    return !!dirStartToBetween && dirStartToBetween === -dirEndToBetween;
+  }
+
+  static isThreeSquaresOnLine(sq1: number, sq2: number, sq3: number): boolean {
+    const rank1 = ChessGame.rank(sq1);
+    const file1 = ChessGame.file(sq1);
+    const rank2 = ChessGame.rank(sq2);
+    const file2 = ChessGame.file(sq2);
+    const rank3 = ChessGame.rank(sq3);
+    const file3 = ChessGame.file(sq3);
+
+    return (rank1 - rank2) * (file1 - file3) === (rank1 - rank3) * (file1 - file2);
+  }
+
+  getSliderSquareOnDirection(dir: number, startSq: number, color: Color): number {
+    const isDiagonal = ChessGame.isDiagonal(dir);
+    let sq = startSq + dir;
+    while (this.board[sq] !== SquareType.OFFBOARD) {
+      const piece = this.board[sq];
+      const pieceColor = ChessGame.pieceColor(piece);
+      const pieceType = ChessGame.pieceType(piece);
+      if (piece !== SquareType.EMPTY) {
+        if (pieceColor === color
+          && (pieceType === (isDiagonal ? PieceType.BISHOP : PieceType.ROOK) || pieceType === PieceType.QUEEN)) {
+          return sq;
+        }
+
+        return Squares.NO_SQUARE;
+      }
+      sq += dir;
+    }
+
+    return Squares.NO_SQUARE;
+  }
+
+  getPinDirection(kingSq: number, pieceSq: number, color: Color): number {
+    const dir = ChessGame.getDirection(kingSq, pieceSq);
+
+    let sq = kingSq + dir;
+
+    while(sq !== pieceSq) {
+      if (this.board[sq] !== SquareType.EMPTY) {
+        return 0;
+      }
+      sq += dir;
+    }
+
+    return this.getSliderSquareOnDirection(dir, pieceSq, color) === Squares.NO_SQUARE ? 0 : dir;
+  }
+
   uciToNumeric(moveUci: string): number {
     const from = ChessGame.literalToSquare(moveUci.slice(0, 2));
     const to = ChessGame.literalToSquare(moveUci.slice(2, 4));
@@ -335,6 +422,7 @@ class ChessGame {
     if (pieceCount[pawn] !== 0) {
       for (let i = 0; i < PAWN_CAPTURING[sideColor].length; i++) {
         if (this.board[square - PAWN_CAPTURING[sideColor][i]] === pawn) {
+          this.checkingPieceSquare = square - PAWN_CAPTURING[sideColor][i];
           return true;
         }
       }
@@ -343,6 +431,7 @@ class ChessGame {
     if (pieceCount[knight] !== 0) {
       for (let i = 0; i < KNIGHT_MOVES.length; i++) {
         if (this.board[square + KNIGHT_MOVES[i]] === knight) {
+          this.checkingPieceSquare = square + KNIGHT_MOVES[i];
           return true;
         }
       }
@@ -362,6 +451,7 @@ class ChessGame {
         while (this.board[sq] !== SquareType.OFFBOARD) {
           if (this.board[sq] !== SquareType.EMPTY) {
             if (this.board[sq] === bishop || this.board[sq] === queen) {
+              this.checkingPieceSquare = sq;
               return true;
             } else {
               break;
@@ -378,6 +468,7 @@ class ChessGame {
         while (this.board[sq] !== SquareType.OFFBOARD) {
           if (this.board[sq] !== SquareType.EMPTY) {
             if (this.board[sq] === rook || this.board[sq] === queen) {
+              this.checkingPieceSquare = sq;
               return true;
             } else {
               break;
@@ -626,8 +717,15 @@ class ChessGame {
       prevCastlingPermission: this.castlingPermission,
       prevPositionKey: this.positionKey,
       prevMovedPiece: this.movedPiece,
-      prevCapturedPiece: this.capturedPiece
+      prevCapturedPiece: this.capturedPiece,
+      prevIsInCheck: this.isInCheck,
+      prevIsInDoubleCheck: this.isInDoubleCheck,
+      prevCheckingPieceSquare: this.checkingPieceSquare
     });
+
+    this.isInCheck = false;
+    this.isInDoubleCheck = false;
+    this.checkingPieceSquare = Squares.NO_SQUARE;
 
     if (this.epSquare !== Squares.NO_SQUARE) {
       this.positionKey ^= this.zobrist.epKeys[ChessGame.file(this.epSquare)];
@@ -696,10 +794,6 @@ class ChessGame {
       this.positionsTable.set(this.positionKey, 1);
     }
 
-    const opKingRank = ChessGame.rank(opKingSquare);
-    const opKingFile = ChessGame.file(opKingSquare);
-    const toRank = ChessGame.rank(checkingPieceSquare);
-    const toFile = ChessGame.file(checkingPieceSquare);
     const checkingPieceType = ChessGame.pieceType(checkingPiece);
 
     if (checkingPieceType === PieceType.KNIGHT) {
@@ -707,115 +801,41 @@ class ChessGame {
     } else if (checkingPieceType === PieceType.PAWN) {
       this.isInCheck = PAWN_CAPTURING[color].includes(opKingSquare - checkingPieceSquare);
     } else if (checkingPieceType !== PieceType.KING) {
-      let dir = 0;
-      let isDiagonal = false;
-
-      if (opKingRank === toRank) {
-        dir = (checkingPieceSquare - opKingSquare) / Math.abs(toFile - opKingFile);
-      } else if (opKingFile === toFile) {
-        dir = (checkingPieceSquare - opKingSquare) / Math.abs(toRank - opKingRank);
-      } else if (Math.abs(toRank - opKingRank) === Math.abs(toFile - opKingFile)) {
-        dir = (checkingPieceSquare - opKingSquare) / Math.abs(toRank - opKingRank);
-        isDiagonal = true;
-      }
-
-      if (dir) {
-        let sq = opKingSquare + dir;
-        while (this.board[sq] !== SquareType.OFFBOARD) {
-          const piece = this.board[sq];
-          const pieceColor = ChessGame.pieceColor(piece);
-          const pieceType = ChessGame.pieceType(piece);
-          if (piece !== SquareType.EMPTY) {
-            this.isInCheck = pieceColor === color
-              && (pieceType === (isDiagonal ? PieceType.BISHOP : PieceType.ROOK) || pieceType === PieceType.QUEEN);
-            break;
-          }
-          sq += dir;
-        }
-      }
+      const dir = ChessGame.getDirection(opKingSquare, checkingPieceSquare);
+      this.isInCheck = this.getSliderSquareOnDirection(dir, opKingSquare, color) !== Squares.NO_SQUARE;
     }
 
     if (this.isInCheck) {
       this.checkingPieceSquare = checkingPieceSquare;
     } else if (moveType === MoveType.ENPASSANT) {
-      const capturedRank = ChessGame.rank(capturedSquare);
-      const capturedFile = ChessGame.file(capturedSquare);
+      const dir = ChessGame.getDirection(opKingSquare, capturedSquare);
 
-      if (Math.abs(capturedRank - opKingRank) === Math.abs(capturedFile - opKingFile)) {
-        const dir = (capturedSquare - opKingSquare) / Math.abs(capturedRank - opKingRank);
-
-
-        let sq = opKingSquare + dir;
-        while (this.board[sq] !== SquareType.OFFBOARD) {
-          const piece = this.board[sq];
-          const pieceColor = ChessGame.pieceColor(piece);
-          const pieceType = ChessGame.pieceType(piece);
-          if (piece !== SquareType.EMPTY) {
-            this.isInCheck = pieceColor === color
-              && (pieceType === PieceType.BISHOP || pieceType === PieceType.QUEEN);
-            break;
-          }
-          sq += dir;
-        }
-
-        if (this.isInCheck) {
-          this.checkingPieceSquare = sq;
-        }
+      if (ChessGame.isDiagonal(dir)) {
+        this.checkingPieceSquare = this.getSliderSquareOnDirection(dir, opKingSquare, color);
+        this.isInCheck = this.checkingPieceSquare !== Squares.NO_SQUARE;
       }
     }
 
-    if (moveType !== MoveType.CASTLING && movedPieceType !== PieceType.QUEEN) {
-      const fromRank = ChessGame.rank(from);
-      const fromFile = ChessGame.file(from);
-      const toRank = ChessGame.rank(to);
-      const toFile = ChessGame.file(to);
-
-      let dir = 0;
-      let isDiagonal = false;
-      let isDiscoveredCheck = false;
-
-      if (movedPieceType !== PieceType.ROOK) {
-        if (toRank !== fromRank && opKingRank === fromRank) {
-          dir = (from - opKingSquare) / Math.abs(fromFile - opKingFile);
-        } else if (toFile !== fromFile && opKingFile === fromFile) {
-          dir = (from - opKingSquare) / Math.abs(fromRank - opKingRank);
-        }
-      }
+    if (moveType !== MoveType.CASTLING && checkingPieceType !== PieceType.QUEEN) {
+      const dir = ChessGame.getDirection(opKingSquare, from);
+      const isDiagonal = ChessGame.isDiagonal(dir);
+      const isOrthogonal = ChessGame.isOrthogonal(dir);
 
       if (
-        movedPieceType !== PieceType.BISHOP
-        && (fromRank - toRank) * (fromFile - opKingFile) !== (fromRank - opKingRank) * (fromFile - toFile)
-        && Math.abs(opKingRank - fromRank) === Math.abs(opKingFile - fromFile)
+        (checkingPieceType !== PieceType.BISHOP && isDiagonal && !ChessGame.isThreeSquaresOnLine(from, to, opKingSquare))
+        || (checkingPieceType !== PieceType.ROOK && isOrthogonal)
       ) {
-        dir = (from - opKingSquare) / Math.abs(fromRank - opKingRank);
-        isDiagonal = true;
-      }
+        const checkingPieceSquare = this.getSliderSquareOnDirection(dir, opKingSquare, color);
+        const isDiscoveredCheck = checkingPieceSquare !== Squares.NO_SQUARE;
 
-      let sq = opKingSquare + dir;
-      if (dir) {
-        while (this.board[sq] !== SquareType.OFFBOARD) {
-          const piece = this.board[sq];
-          const pieceColor = ChessGame.pieceColor(piece);
-          const pieceType = ChessGame.pieceType(piece);
-          if (piece !== SquareType.EMPTY) {
-            isDiscoveredCheck = pieceColor === color
-                && (pieceType === (isDiagonal ? PieceType.BISHOP : PieceType.ROOK) || pieceType === PieceType.QUEEN);
-            break;
-          }
-          sq += dir;
+        if (this.isInCheck) {
+          this.isInDoubleCheck = isDiscoveredCheck;
+        } else {
+          this.isInCheck = isDiscoveredCheck;
+          this.checkingPieceSquare = checkingPieceSquare;
         }
       }
-
-      if (this.isInCheck) {
-        this.isInDoubleCheck = isDiscoveredCheck;
-      } else {
-        this.isInCheck = isDiscoveredCheck;
-        this.checkingPieceSquare = sq;
-      }
     }
-
-    console.log('isInCheck', this.isInCheck);
-    console.log('isInDoubleCheck', this.isInDoubleCheck);
 
     // console.log('after: ', ChessGame.numericToUci(move));
     // this.printBoard();
@@ -842,7 +862,10 @@ class ChessGame {
       prevCastlingPermission,
       prevPositionKey,
       prevMovedPiece,
-      prevCapturedPiece
+      prevCapturedPiece,
+      prevIsInCheck,
+      prevIsInDoubleCheck,
+      prevCheckingPieceSquare
     } = prevState;
 
     const prevColor = this.turn ^ 1;
@@ -862,6 +885,9 @@ class ChessGame {
     this.movedPiece = prevMovedPiece;
     this.capturedPiece = prevCapturedPiece;
     this.positionKey = prevPositionKey;
+    this.isInCheck = prevIsInCheck;
+    this.isInDoubleCheck = prevIsInDoubleCheck;
+    this.checkingPieceSquare = prevCheckingPieceSquare;
 
     const to = sq120(prevMove & 63);
     const from = sq120(prevMove >> 6 & 63);
@@ -894,6 +920,7 @@ class ChessGame {
   getPseudoLegalMoves(): number[] {
     const moves = [];
     const color = this.turn;
+    const opColor = color ^ 1;
     const pawnMove = PAWN_MOVES[color].normal;
     const pawnMoveAdvanced = PAWN_MOVES[color].advanced;
     const pawnCapturing = PAWN_CAPTURING[color];
@@ -907,113 +934,205 @@ class ChessGame {
     const rook = pieces[PieceType.ROOK];
     const queen = pieces[PieceType.QUEEN];
     const king = pieces[PieceType.KING];
+    const kingSquare = this.pieceList[king][0];
+    const range = isWTurn ? [Piece.wP, Piece.wK] : [Piece.bP, Piece.bK];
 
-    for (let p = 0; p < PIECE_NUMBER; p++) {
+    for (let p = range[0]; p <= range[1]; p++) {
+      if (this.isInDoubleCheck && p !== king) {
+        continue;
+      }
+
       for (let i = 0, squares = this.pieceList[p]; i < squares.length; i++) {
-        const sq = squares[i];
+        const from = squares[i];
 
-        if (sq === Squares.NO_SQUARE) {
+        if (from === Squares.NO_SQUARE) {
           break;
         }
 
-        if (this.isInDoubleCheck && p !== king) {
+        const pinDirection = this.getPinDirection(kingSquare, from, opColor);
+
+        if (pinDirection && this.isInCheck) {
           continue;
         }
 
         switch (p) {
           case pawn:
-            const pawnRank = ChessGame.rank(sq);
+            const pawnRank = ChessGame.rank(from);
             for (let i = 0; i < pawnCapturing.length; i++) {
-              if (this.isEnemyPiece(this.board[sq + pawnCapturing[i]])) {
+              const dir = pawnCapturing[i];
+              const to = from + dir;
+
+              if (this.isEnemyPiece(this.board[to])) {
+                if (
+                  (pinDirection && Math.abs(pinDirection) !== Math.abs(dir))
+                  || (this.isInCheck && to !== this.checkingPieceSquare)
+                ) {
+                  continue;
+                }
+
                 if (pawnRank === prePromotionRank) {
-                  moves.push(ChessGame.createPromotionMove(sq, sq + pawnCapturing[i], Promotion.q));
-                  moves.push(ChessGame.createPromotionMove(sq, sq + pawnCapturing[i], Promotion.n));
-                  moves.push(ChessGame.createPromotionMove(sq, sq + pawnCapturing[i], Promotion.r));
-                  moves.push(ChessGame.createPromotionMove(sq, sq + pawnCapturing[i], Promotion.b));
+                  moves.push(ChessGame.createPromotionMove(from, to, Promotion.q));
+                  moves.push(ChessGame.createPromotionMove(from, to, Promotion.n));
+                  moves.push(ChessGame.createPromotionMove(from, to, Promotion.r));
+                  moves.push(ChessGame.createPromotionMove(from, to, Promotion.b));
                 } else {
-                  moves.push(ChessGame.createMove(sq, sq + pawnCapturing[i]));
+                  moves.push(ChessGame.createMove(from, to));
                 }
               }
-              if (this.epSquare === sq + pawnCapturing[i]) {
-                moves.push(ChessGame.createEnpassantMove(sq, sq + pawnCapturing[i]));
+              if (this.epSquare === to) {
+                moves.push(ChessGame.createEnpassantMove(from, to));
               }
             }
-            if (this.board[sq + pawnMove] === SquareType.EMPTY) {
-              if (pawnRank === prePromotionRank) {
-                moves.push(ChessGame.createPromotionMove(sq, sq + pawnMove, Promotion.q));
-                moves.push(ChessGame.createPromotionMove(sq, sq + pawnMove, Promotion.n));
-                moves.push(ChessGame.createPromotionMove(sq, sq + pawnMove, Promotion.r));
-                moves.push(ChessGame.createPromotionMove(sq, sq + pawnMove, Promotion.b));
-              } else {
-                moves.push(ChessGame.createMove(sq, sq + pawnMove));
+
+            if (this.board[from + pawnMove] === SquareType.EMPTY) {
+              if (pinDirection && !ChessGame.isVertical(pinDirection)) {
+                continue;
               }
-              if (pawnRank === longMoveRank && this.board[sq + pawnMoveAdvanced] === SquareType.EMPTY) {
-                moves.push(ChessGame.createMove(sq, sq + pawnMoveAdvanced));
+
+              if (pawnRank === prePromotionRank) {
+                const to = from + pawnMove;
+
+                if (!this.isInCheck || ChessGame.isSquareBetween(kingSquare, this.checkingPieceSquare, to)) {
+                  moves.push(ChessGame.createPromotionMove(from, to, Promotion.q));
+                  moves.push(ChessGame.createPromotionMove(from, to, Promotion.n));
+                  moves.push(ChessGame.createPromotionMove(from, to, Promotion.r));
+                  moves.push(ChessGame.createPromotionMove(from, to, Promotion.b));
+                }
+              } else {
+                const to = from + pawnMove;
+
+                if (!this.isInCheck || ChessGame.isSquareBetween(kingSquare, this.checkingPieceSquare, to)) {
+                  moves.push(ChessGame.createMove(from, to));
+                }
+              }
+              if (pawnRank === longMoveRank && this.board[from + pawnMoveAdvanced] === SquareType.EMPTY) {
+                const to = from + pawnMoveAdvanced;
+
+                if (!this.isInCheck || ChessGame.isSquareBetween(kingSquare, this.checkingPieceSquare, to)) {
+                  moves.push(ChessGame.createMove(from, to));
+                }
               }
             }
             break;
           case knight:
+            if (pinDirection) {
+              continue;
+            }
+
             for (let i = 0; i < KNIGHT_MOVES.length; i++) {
-              const nextSq = sq + KNIGHT_MOVES[i];
-              if (this.board[nextSq] === SquareType.EMPTY || this.isEnemyPiece(this.board[nextSq])) {
-                moves.push(ChessGame.createMove(sq, nextSq));
+              const to = from + KNIGHT_MOVES[i];
+
+              if (
+                this.isInCheck
+                && !ChessGame.isSquareBetween(kingSquare, this.checkingPieceSquare, to)
+                && to !== this.checkingPieceSquare
+              ) {
+                continue;
+              }
+
+              if (this.board[to] === SquareType.EMPTY || this.isEnemyPiece(this.board[to])) {
+                moves.push(ChessGame.createMove(from, to));
               }
             }
             break;
           case bishop:
+            if (pinDirection && ChessGame.isOrthogonal(pinDirection)) {
+              continue;
+            }
+
             for (let i = 0; i < BISHOP_MOVES.length; i++) {
-              let nextSq = sq + BISHOP_MOVES[i];
-              while (this.board[nextSq] !== SquareType.OFFBOARD) {
-                if (this.isEnemyPiece(this.board[nextSq]) || this.board[nextSq] === SquareType.EMPTY) {
-                  moves.push(ChessGame.createMove(sq, nextSq));
+              const dir = BISHOP_MOVES[i];
+
+              if (pinDirection && Math.abs(pinDirection) !== Math.abs(dir)) {
+                continue;
+              }
+
+              let to = from + dir;
+              while (this.board[to] !== SquareType.OFFBOARD) {
+                if (this.board[to] === SquareType.EMPTY || this.isEnemyPiece(this.board[to])) {
+                  if (
+                    !this.isInCheck
+                    || ChessGame.isSquareBetween(kingSquare, this.checkingPieceSquare, to)
+                    || to === this.checkingPieceSquare
+                  ) {
+                    moves.push(ChessGame.createMove(from, to));
+                  }
                 }
 
-                if (this.board[nextSq] !== SquareType.EMPTY) {
+                if (this.board[to] !== SquareType.EMPTY) {
                   break;
                 }
-                nextSq += BISHOP_MOVES[i];
+                to += dir;
               }
             }
             break;
           case rook:
+            if (pinDirection && ChessGame.isDiagonal(pinDirection)) {
+              continue;
+            }
+
             for (let i = 0; i < ROOK_MOVES.length; i++) {
-              let nextSq = sq + ROOK_MOVES[i];
-              while (this.board[nextSq] !== SquareType.OFFBOARD) {
-                if (this.isEnemyPiece(this.board[nextSq]) || this.board[nextSq] === SquareType.EMPTY) {
-                  moves.push(ChessGame.createMove(sq, nextSq));
+              const dir = ROOK_MOVES[i];
+
+              if (pinDirection && Math.abs(pinDirection) !== Math.abs(dir)) {
+                continue;
+              }
+
+              let to = from + dir;
+              while (this.board[to] !== SquareType.OFFBOARD) {
+                if (this.board[to] === SquareType.EMPTY || this.isEnemyPiece(this.board[to])) {
+                  if (
+                    !this.isInCheck
+                    || ChessGame.isSquareBetween(kingSquare, this.checkingPieceSquare, to)
+                    || to === this.checkingPieceSquare
+                  ) {
+                    moves.push(ChessGame.createMove(from, to));
+                  }
                 }
 
-                if (this.board[nextSq] !== SquareType.EMPTY) {
+                if (this.board[to] !== SquareType.EMPTY) {
                   break;
                 }
-                nextSq += ROOK_MOVES[i];
+                to += dir;
               }
             }
             break;
           case queen:
             for (let i = 0; i < QUEEN_MOVES.length; i++) {
-              let nextSq = sq + QUEEN_MOVES[i];
-              while (this.board[nextSq] !== SquareType.OFFBOARD) {
-                if (this.isEnemyPiece(this.board[nextSq]) || this.board[nextSq] === SquareType.EMPTY) {
-                  moves.push(ChessGame.createMove(sq, nextSq));
+              const dir = QUEEN_MOVES[i];
+
+              if (pinDirection && Math.abs(pinDirection) !== Math.abs(dir)) {
+                continue;
+              }
+
+              let to = from + dir;
+              while (this.board[to] !== SquareType.OFFBOARD) {
+                if (this.board[to] === SquareType.EMPTY || this.isEnemyPiece(this.board[to])) {
+                  if (
+                    !this.isInCheck
+                    || ChessGame.isSquareBetween(kingSquare, this.checkingPieceSquare, to)
+                    || to === this.checkingPieceSquare
+                  ) {
+                    moves.push(ChessGame.createMove(from, to));
+                  }
                 }
 
-                if (this.board[nextSq] !== SquareType.EMPTY) {
+                if (this.board[to] !== SquareType.EMPTY) {
                   break;
                 }
-                nextSq += QUEEN_MOVES[i];
+                to += dir;
               }
             }
             break;
           case king:
             for (let i = 0; i < KING_MOVES.length; i++) {
-              let nextSq = sq + KING_MOVES[i];
-              if (this.board[nextSq] === SquareType.EMPTY || this.isEnemyPiece(this.board[nextSq])) {
-                moves.push(ChessGame.createMove(sq, nextSq));
+              let to = from + KING_MOVES[i];
+              if (this.board[to] === SquareType.EMPTY || this.isEnemyPiece(this.board[to])) {
+                moves.push(ChessGame.createMove(from, to));
               }
             }
 
-            if (!this.isCheck()) {
+            if (!this.isInCheck) {
               if (isWTurn) {
                 if (
                   (this.castlingPermission & Castling.WK)
@@ -1092,10 +1211,16 @@ class ChessGame {
     const prevFromPiece = this.board[from];
     const color = this.turn;
     const isKing = ChessGame.pieceType(prevFromPiece) === PieceType.KING;
-    const isPawn = ChessGame.pieceType(prevFromPiece) === PieceType.PAWN;
+    const moveType = move >> 14;
 
-    if (isPawn && to === this.epSquare) {
+    if (moveType !== MoveType.ENPASSANT && !isKing) {
+      return true;
+    }
+
+    if (moveType === MoveType.ENPASSANT) {
       this.board[to - PAWN_MOVES[color].normal] = SquareType.EMPTY;
+      this.board[from] = SquareType.EMPTY;
+      this.board[to] = prevFromPiece;
     }
 
     if (isKing) {
@@ -1104,15 +1229,14 @@ class ChessGame {
       }
 
       this.movePiece(prevFromPiece, from, to);
-    } else {
-      this.board[from] = SquareType.EMPTY;
-      this.board[to] = prevFromPiece;
     }
 
     const isCheck = this.isCheck();
 
-    if (isPawn && to === this.epSquare) {
+    if (moveType === MoveType.ENPASSANT) {
       this.board[to - PAWN_MOVES[color].normal] = ChessGame.createPiece(color ^ 1, PieceType.PAWN);
+      this.board[from] = prevFromPiece;
+      this.board[to] = prevToPiece;
     }
 
     if (isKing) {
@@ -1121,9 +1245,6 @@ class ChessGame {
       if (prevToPiece !== SquareType.EMPTY) {
         this.putPiece(prevToPiece, to);
       }
-    } else {
-      this.board[from] = prevFromPiece;
-      this.board[to] = prevToPiece;
     }
 
     return !isCheck;

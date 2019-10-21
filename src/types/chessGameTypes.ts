@@ -6,6 +6,9 @@ export interface GameState {
   prevPositionKey: bigint;
   prevMovedPiece: number;
   prevCapturedPiece: number;
+  prevIsInCheck: boolean;
+  prevIsInDoubleCheck: boolean;
+  prevCheckingPieceSquare: number;
 }
 
 export interface Zobrist {
