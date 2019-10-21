@@ -95,7 +95,7 @@ export default class MinimaxBot extends ChessGame {
 
       const timestamp1 = process.hrtime.bigint();
 
-      if (this.isCheck() && !this.haveLegalMoves()) {
+      if (this.isCheckmate()) {
         return -1e3;
       }
 
@@ -103,7 +103,7 @@ export default class MinimaxBot extends ChessGame {
 
       const timestamp2 = process.hrtime.bigint();
 
-      if ((!this.isCheck() && !this.haveLegalMoves()) || this.isDraw()) {
+      if (this.isStalemate() || this.isDraw()) {
         return 0
       }
 
@@ -115,7 +115,7 @@ export default class MinimaxBot extends ChessGame {
     const legalMoves = this.getLegalMoves();
 
     if (legalMoves.length === 0) {
-      if (this.isCheck()) {
+      if (this.isInCheck) {
         return -1e3 - depth;
       }
 

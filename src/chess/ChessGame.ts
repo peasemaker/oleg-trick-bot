@@ -567,11 +567,11 @@ class ChessGame {
   }
 
   isCheckmate(): boolean {
-    return this.isCheck() && this.getLegalMoves().length === 0;
+    return this.isInCheck && !this.hasLegalMoves();
   }
 
   isStalemate(): boolean {
-    return !this.isCheck() && this.getLegalMoves().length === 0;
+    return !this.isInCheck && !this.hasLegalMoves();
   }
 
   isInsufficientMaterial(): boolean {
@@ -1192,7 +1192,7 @@ class ChessGame {
     return legalMoves;
   }
 
-  haveLegalMoves(): boolean {
+  hasLegalMoves(): boolean {
     const pseudoLegalMoves = this.getPseudoLegalMoves();
 
     for (let i = 0, l = pseudoLegalMoves.length; i < l; i++) {
