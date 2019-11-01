@@ -112,14 +112,6 @@ class ChessGame {
     return sq64(sq) >> 3;
   }
 
-  static moveFrom(move: number): number {
-    return sq120((move >> 6) & 63);
-  }
-
-  static moveTo(move: number): number {
-    return sq120((move & 63));
-  }
-
   static isWhitePiece(piece: number): boolean {
     return (piece >= Piece.wP) && (piece <= Piece.wK);
   }
@@ -694,8 +686,9 @@ class ChessGame {
     const rook = pieces[PieceType.ROOK];
     const queen = pieces[PieceType.QUEEN];
     const king = pieces[PieceType.KING];
+    const pieceRange = isWTurn ? [Piece.wP, Piece.wK] : [Piece.bP, Piece.bK];
 
-    for (let p = 0; p < PIECE_NUMBER; p++) {
+    for (let p = pieceRange[0]; p <= pieceRange[1]; p++) {
       for (let i = 0, squares = this.pieceList[p]; i < squares.length; i++) {
         const sq = squares[i];
 

@@ -1,10 +1,22 @@
 import ChessGame from '../chess/ChessGame';
 import {g, m} from '../helpers';
+import {
+  Color,
+  PIECE_NUMBER,
+  PiecesByColor,
+  pieceSquareValues,
+  PieceType,
+  sq64,
+  Squares
+} from '../constants/chessGameConstants';
+
+const CHECKMATE_SCORE = 1e6;
+const DRAW_SCORE = 0;
 
 export default class MinimaxBot extends ChessGame {
   depth: number;
   nodesCount: number;
-  positionScoreTable: Map<bigint, {depth: number, score: number}>;
+  positionScoreTable: Map<bigint, number>;
   firstCutNodesCount: number;
   cutNodesCount: number;
   performances: number[];
@@ -23,7 +35,7 @@ export default class MinimaxBot extends ChessGame {
   }
 
   private printScore(score: number): string {
-    return Math.abs(score) >= 1e3 ? `#${score < 0 ? '-' : ''}${Math.floor((1e3 - Math.abs(score) + this.depth ) / 2) + 1}` : score.toString();
+    return Math.abs(score) >= CHECKMATE_SCORE ? `#${score < 0 ? '-' : ''}${Math.floor((CHECKMATE_SCORE - Math.abs(score) + this.depth ) / 2) + 1}` : score.toString();
   }
 
   getNextMove(): number {
@@ -72,6 +84,7 @@ export default class MinimaxBot extends ChessGame {
 
     const end = process.hrtime.bigint();
     const moveTime = Number(end - start) / 1e6;
+    // console.log(`all moves: ${movesWithScore.map(move => `${m(ChessGame.numericToUci(move[0]))} (${g(this.printScore(move[1]))})`).join(' ')}`);
     console.log(`best moves: ${bestMoves.map(move => `${m(ChessGame.numericToUci(move[0]))} (${g(this.printScore(move[1]))})`).join(' ')}`);
     console.log(`picked move: ${m(ChessGame.numericToUci(pickedMove[0]))} (${g(this.printScore(pickedMove[1]))}); time: ${g(moveTime.toFixed(3))} ms`);
     console.log(`node count: ${m(this.nodesCount)}`);
@@ -96,24 +109,24 @@ export default class MinimaxBot extends ChessGame {
     if (depth === 0) {
       this.nodesCount++;
 
-      const isInCheck = this.isCheck();
+      const cashedScore = this.positionScoreTable.get(this.positionKey);
 
-      if (isInCheck && !this.haveLegalMoves()) {
-        return -1e3;
+      if (cashedScore !== undefined) {
+        return cashedScore;
       }
 
-      if ((!isInCheck && !this.haveLegalMoves()) || this.isDraw()) {
-        return 0
-      }
+      const positionScore = this.evalPosition();
 
-      return this.evalMaterial();
+      this.positionScoreTable.set(this.positionKey, positionScore);
+
+      return positionScore;
     }
 
     const legalMoves = this.getLegalMoves();
 
     if (legalMoves.length === 0) {
       if (this.isCheck()) {
-        return -1e3 - depth;
+        return -CHECKMATE_SCORE - depth;
       }
 
       return 0;
@@ -147,7 +160,40 @@ export default class MinimaxBot extends ChessGame {
     return alpha;
   }
 
-  evalMaterial(): number {
-    return this.materialScore[this.turn] - this.materialScore[this.turn ^ 1];
+  evalPosition() {
+    const isInCheck = this.isCheck();
+
+    if (isInCheck && !this.haveLegalMoves()) {
+      return -CHECKMATE_SCORE;
+    }
+
+    if ((!isInCheck && !this.haveLegalMoves()) || this.isDraw()) {
+      return DRAW_SCORE;
+    }
+
+    return this.evalMaterial(this.turn) - this.evalMaterial(this.turn ^ 1);
+  }
+
+  evalMaterial(color: Color): number {
+    let material = this.materialScore[color];
+    let pieces = PiecesByColor[color];
+
+    for (let i = 0; i < pieces.length; i++) {
+      const p = pieces[i];
+
+      for (let j = 0, squares = this.pieceList[p]; j < squares.length; j++) {
+        const sq = squares[j];
+
+        if (sq === Squares.NO_SQUARE) {
+          break;
+        }
+
+        if (ChessGame.pieceType(p) !== PieceType.KING) {
+            material += pieceSquareValues[p][sq64(sq)];
+        }
+      }
+    }
+
+    return material;
   }
 }
