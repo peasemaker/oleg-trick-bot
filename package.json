@@ -22,7 +22,7 @@
     "@types/dotenv": "^6.1.1",
     "@types/node": "^12.6.9",
     "install": "^0.13.0",
-    "npm": "^6.10.2",
+    "npm": "^6.13.4",
     "ts-node": "^8.3.0",
     "typescript": "^3.5.3"
   },
