@@ -7,12 +7,13 @@ import {
   RoomType,
   Bot
 } from '../types';
-import {m} from '../helpers';
+import { m } from '../helpers';
 import * as dotenv from 'dotenv';
 dotenv.config();
 
 const token = process.env.TOKEN!;
 
+// const whiteList = ['victorinthesky', 'droooney', 'tonygbotdev', 'tonygbot'];
 const whiteList = ['victorinthesky', 'droooney', 'tonygbotdev', 'tonygbot'];
 
 export default class LichessBot {

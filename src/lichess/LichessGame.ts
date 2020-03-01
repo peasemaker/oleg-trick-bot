@@ -63,7 +63,7 @@ export default class LichessGame {
         break;
       }
       default:
-        console.error(`Unexpected game event: ${event}`);
+        console.error(`Unexpected game event: ${JSON.stringify(event)}`);
     }
   }
 

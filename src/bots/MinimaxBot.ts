@@ -2,16 +2,18 @@ import ChessGame from '../chess/ChessGame';
 import {g, m} from '../helpers';
 import {
   Color,
-  PIECE_NUMBER,
+  PIECE_NUMBER, PIECE_VALUES,
   PiecesByColor,
   pieceSquareValues,
   PieceType,
+  sq120,
   sq64,
-  Squares
+  Squares, SquareType
 } from '../constants/chessGameConstants';
 
 const CHECKMATE_SCORE = 1e6;
 const DRAW_SCORE = 0;
+const ENDGAME_THRESHOLD = 1400;
 
 export default class MinimaxBot extends ChessGame {
   depth: number;
@@ -25,7 +27,7 @@ export default class MinimaxBot extends ChessGame {
   constructor() {
     super();
 
-    this.depth = 3;
+    this.depth = 5;
     this.nodesCount = 0;
     this.positionScoreTable = new Map();
     this.firstCutNodesCount = 0;
@@ -42,7 +44,7 @@ export default class MinimaxBot extends ChessGame {
     this.nodesCount = 0;
     const start = process.hrtime.bigint();
 
-    const legalMoves = this.getLegalMoves();
+    const legalMoves = this.sortMoves(this.getLegalMoves());
 
     if (legalMoves.length === 0) {
       return 0;
@@ -52,7 +54,11 @@ export default class MinimaxBot extends ChessGame {
     let pickedMove, bestMoves;
     let alpha = -Infinity;
 
-    // console.log(legalMoves.map(m => ChessGame.numericToUci(m)).join('; '));
+    console.log(legalMoves.map(m => ChessGame.numericToUci(m)).join('; '));
+
+    // if (legalMoves.length !== 0) {
+    //   throw new Error();
+    // }
 
     if (legalMoves.length > 1) {
       for (let i = 0; i < legalMoves.length; i++) {
@@ -104,7 +110,6 @@ export default class MinimaxBot extends ChessGame {
     return pickedMove[0];
   }
 
-  // TODO: do not eval same positions
   minimax(depth: number, alpha: number, beta: number): number {
     if (depth === 0) {
       this.nodesCount++;
@@ -122,7 +127,8 @@ export default class MinimaxBot extends ChessGame {
       return positionScore;
     }
 
-    const legalMoves = this.getLegalMoves();
+    const legalMoves = this.sortMoves(this.getLegalMoves());
+    let bestScore = -Infinity;
 
     if (legalMoves.length === 0) {
       if (this.isCheck()) {
@@ -139,21 +145,26 @@ export default class MinimaxBot extends ChessGame {
     for (let i = 0; i < legalMoves.length; i++) {
       const move = legalMoves[i];
       this.makeMove(move);
+
       const score = -this.minimax(depth - 1, -beta, -alpha);
 
       this.revertMove();
 
-      if (score >= beta) {
+      if (score > bestScore) {
+        bestScore = score;
+      }
+
+      if (bestScore > alpha) {
+        alpha = bestScore;
+      }
+
+      if (bestScore >= beta) {
         if (i === 0) {
           this.firstCutNodesCount++;
         }
 
         this.cutNodesCount++;
-        return beta;
-      }
-
-      if (score > alpha) {
-        alpha = score;
+        break;
       }
     }
 
@@ -171,10 +182,12 @@ export default class MinimaxBot extends ChessGame {
       return DRAW_SCORE;
     }
 
-    return this.evalMaterial(this.turn) - this.evalMaterial(this.turn ^ 1);
+    const isEndgame = this.materialScore[this.turn] <= ENDGAME_THRESHOLD && this.materialScore[this.turn ^ 1] <= ENDGAME_THRESHOLD;
+
+    return this.evalMaterial(this.turn, isEndgame) - this.evalMaterial(this.turn ^ 1, isEndgame);
   }
 
-  evalMaterial(color: Color): number {
+  evalMaterial(color: Color, isEndgame: boolean): number {
     let material = this.materialScore[color];
     let pieces = PiecesByColor[color];
 
@@ -188,12 +201,37 @@ export default class MinimaxBot extends ChessGame {
           break;
         }
 
-        if (ChessGame.pieceType(p) !== PieceType.KING) {
-            material += pieceSquareValues[p][sq64(sq)];
+        if (ChessGame.pieceType(p) === PieceType.KING && isEndgame) {
+          material += pieceSquareValues[color][sq64(sq)];
+        } else {
+          material += pieceSquareValues[p][sq64(sq)];
         }
       }
     }
 
     return material;
+  }
+
+  sortMoves(moves: number[]): number[] {
+    const movesScore: Record<number, number> = {};
+
+    for (let i = 0; i < moves.length; i++) {
+      movesScore[moves[i]] = this.getMoveScore(moves[i]);
+    }
+
+    return moves.sort((move1, move2) => {
+      return movesScore[move2] - movesScore[move1];
+    });
+  }
+
+  getMoveScore(move: number): number {
+    const from = sq120(move >> 6 & 63);
+    const to = sq120(move & 63);
+    const fromPiece = this.board[from];
+    const toPiece = this.board[to];
+    const fromPieceValue = PIECE_VALUES[ChessGame.pieceType(fromPiece)] + pieceSquareValues[fromPiece][sq64(from)];
+    const toPieceValue = toPiece === SquareType.EMPTY ? fromPieceValue : PIECE_VALUES[ChessGame.pieceType(toPiece)] + pieceSquareValues[toPiece][sq64(to)];
+
+    return toPieceValue - fromPieceValue;
   }
 }

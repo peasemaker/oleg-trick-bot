@@ -1,8 +1,8 @@
 export const BOARD_SIZE = 120;
 export const DEFAULT_FEN = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
 export enum Color {
-  WHITE = 0,
-  BLACK = 1
+  WHITE,
+  BLACK
 }
 export enum PieceType {
   PAWN,
@@ -13,7 +13,7 @@ export enum PieceType {
   KING
 }
 export enum Piece {
-  wP = 0, wN, wB, wR, wQ, wK,
+  wP, wN, wB, wR, wQ, wK,
   bP, bN, bB, bR, bQ, bK
 }
 export const PIECE_NUMBER = 12;
@@ -32,7 +32,7 @@ export const Promotion: {[promotion in string]: number} = {
   q: 3
 };
 export enum MoveType {
-  NORMAL = 0,
+  NORMAL,
   PROMOTION,
   ENPASSANT,
   CASTLING
@@ -53,7 +53,7 @@ export enum Squares {
   NO_SQUARE = -1
 }
 export enum Ranks {
-  RANK_8 = 0,
+  RANK_8,
   RANK_7,
   RANK_6,
   RANK_5,
@@ -63,7 +63,7 @@ export enum Ranks {
   RANK_1
 }
 export enum Files {
-  FILE_A = 0,
+  FILE_A,
   FILE_B,
   FILE_C,
   FILE_D,
@@ -73,7 +73,7 @@ export enum Files {
   FILE_H
 }
 export enum Castling {
-  NO_CASTLING = 0,
+  NO_CASTLING,
   WK = 1,
   WQ = 2,
   BK = 4,
@@ -152,7 +152,7 @@ export const randInt64 = (): bigint => {
 
   return int64;
 };
-export const PIECE_VALUES = [100, 320, 330, 500, 900, 0];
+export const PIECE_VALUES = [100, 320, 330, 500, 900, 1_000_000];
 export const pieceSquareValues = [
   [
     // white pawn
