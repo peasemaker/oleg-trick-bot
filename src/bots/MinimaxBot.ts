@@ -1,14 +1,22 @@
 import ChessGame from '../chess/ChessGame';
 import {g, m} from '../helpers';
 import {
+  BISHOP_MOVES,
   Color,
-  PIECE_NUMBER, PIECE_VALUES,
+  KNIGHT_MOVES,
+  PAWN_VALUE,
+  Piece,
+  PIECE_VALUES,
   PiecesByColor,
   pieceSquareValues,
   PieceType,
+  QUEEN_MOVES,
+  Ranks,
+  ROOK_MOVES,
   sq120,
   sq64,
-  Squares, SquareType
+  Squares,
+  SquareType
 } from '../constants/chessGameConstants';
 
 const CHECKMATE_SCORE = 1e6;
@@ -27,7 +35,7 @@ export default class MinimaxBot extends ChessGame {
   constructor() {
     super();
 
-    this.depth = 5;
+    this.depth = 3;
     this.nodesCount = 0;
     this.positionScoreTable = new Map();
     this.firstCutNodesCount = 0;
@@ -42,6 +50,9 @@ export default class MinimaxBot extends ChessGame {
 
   getNextMove(): number {
     this.nodesCount = 0;
+    this.firstCutNodesCount = 0;
+    this.cutNodesCount = 0;
+
     const start = process.hrtime.bigint();
 
     const legalMoves = this.sortMoves(this.getLegalMoves());
@@ -184,12 +195,197 @@ export default class MinimaxBot extends ChessGame {
 
     const isEndgame = this.materialScore[this.turn] <= ENDGAME_THRESHOLD && this.materialScore[this.turn ^ 1] <= ENDGAME_THRESHOLD;
 
-    return this.evalMaterial(this.turn, isEndgame) - this.evalMaterial(this.turn ^ 1, isEndgame);
+    return this.evalSide(this.turn, isEndgame) - this.evalSide(this.turn ^ 1, isEndgame);
+  }
+
+  evalSide(color: Color, isEndgame: boolean): number {
+    return (
+        this.evalMaterial(color, isEndgame)
+        + this.evalPiecesMobility(color)
+        + this.evalBishopsAdvantage(color)
+        + this.evalRooksOnFiles(color)
+        + this.evalPawnStructure(color)
+    );
+  }
+
+  evalPiecesMobility(color: Color): number {
+    let scores = 0;
+    const isWTurn = color === Color.WHITE;
+    const pieces = PiecesByColor[color];
+    const knight = pieces[PieceType.KNIGHT];
+    const bishop = pieces[PieceType.BISHOP];
+    const rook = pieces[PieceType.ROOK];
+    const queen = pieces[PieceType.QUEEN];
+    const pieceRange = isWTurn ? [Piece.wN, Piece.wQ] : [Piece.bN, Piece.bQ];
+
+    for (let p = pieceRange[0]; p <= pieceRange[1]; p++) {
+      for (let i = 0, squares = this.pieceList[p]; i < squares.length; i++) {
+        const sq = squares[i];
+
+        if (sq === Squares.NO_SQUARE) {
+          break;
+        }
+
+        switch (p) {
+          case knight:
+            for (let i = 0; i < KNIGHT_MOVES.length; i++) {
+              const nextSq = sq + KNIGHT_MOVES[i];
+              if (this.board[nextSq] === SquareType.EMPTY || this.isEnemyPiece(this.board[nextSq])) {
+                scores += PAWN_VALUE * 0.05;
+              }
+            }
+            break;
+          case bishop:
+            for (let i = 0; i < BISHOP_MOVES.length; i++) {
+              let nextSq = sq + BISHOP_MOVES[i];
+              while (this.board[nextSq] !== SquareType.OFFBOARD) {
+                if (this.isEnemyPiece(this.board[nextSq]) || this.board[nextSq] === SquareType.EMPTY) {
+                  scores += PAWN_VALUE * 0.05;
+                }
+
+                if (this.board[nextSq] !== SquareType.EMPTY) {
+                  break;
+                }
+                nextSq += BISHOP_MOVES[i];
+              }
+            }
+            break;
+          case rook:
+            for (let i = 0; i < ROOK_MOVES.length; i++) {
+              let nextSq = sq + ROOK_MOVES[i];
+              while (this.board[nextSq] !== SquareType.OFFBOARD) {
+                if (this.isEnemyPiece(this.board[nextSq]) || this.board[nextSq] === SquareType.EMPTY) {
+                  scores += PAWN_VALUE * 0.1;
+                }
+
+                if (this.board[nextSq] !== SquareType.EMPTY) {
+                  break;
+                }
+                nextSq += ROOK_MOVES[i];
+              }
+            }
+            break;
+          case queen:
+            for (let i = 0; i < QUEEN_MOVES.length; i++) {
+              let nextSq = sq + QUEEN_MOVES[i];
+              while (this.board[nextSq] !== SquareType.OFFBOARD) {
+                if (this.isEnemyPiece(this.board[nextSq]) || this.board[nextSq] === SquareType.EMPTY) {
+                  scores += PAWN_VALUE * 0.1;
+                }
+
+                if (this.board[nextSq] !== SquareType.EMPTY) {
+                  break;
+                }
+                nextSq += QUEEN_MOVES[i];
+              }
+            }
+            break;
+        }
+      }
+    }
+
+    return scores;
+  }
+
+  evalBishopsAdvantage(color: Color): number {
+    const bishop = ChessGame.createPiece(color, PieceType.BISHOP);
+    const bishopsCount = this.pieceCount[bishop];
+
+    return bishopsCount >= 2 ? PAWN_VALUE * 0.5 : 0;
+  }
+
+  evalRooksOnFiles(color: Color): number {
+    const rook = ChessGame.createPiece(color, PieceType.ROOK);
+    const pawn = ChessGame.createPiece(color, PieceType.PAWN);
+    const enemyPawn = ChessGame.createPiece(color ^ 1, PieceType.PAWN);
+    const rooksSquares = this.pieceList[rook];
+    let scores = 0;
+
+    for (let i = 0; i < rooksSquares.length; i++) {
+      const rookSq = rooksSquares[i];
+
+      if (rookSq === Squares.NO_SQUARE) {
+        break;
+      }
+
+      const file = ChessGame.file(rookSq);
+      let hasOwnPawns = false;
+      let hasEnemyPawns = false;
+
+      for (let rank = Ranks.RANK_8; rank <= Ranks.RANK_1; rank++) {
+        if (!hasOwnPawns && this.board[sq120(file + rank * 8)] === pawn) {
+          hasOwnPawns = true;
+        }
+
+        if (!hasEnemyPawns && this.board[sq120(file + rank * 8)] === enemyPawn) {
+          hasEnemyPawns = true;
+        }
+
+        if (hasOwnPawns && hasEnemyPawns) {
+          break;
+        }
+      }
+
+      if (!hasOwnPawns) {
+        scores += PAWN_VALUE * 0.3;
+
+        if (!hasEnemyPawns) {
+          scores += PAWN_VALUE * 0.3;
+        }
+      }
+    }
+
+    return scores;
+  }
+
+  evalPawnStructure(color: Color): number {
+    let scores = 0;
+
+    const pawnStructure = new Array(8).fill(0);
+    const pawn = ChessGame.createPiece(color, PieceType.PAWN);
+    const pawnsSquares = this.pieceList[pawn];
+
+    for (let i = 0; i < pawnsSquares.length; i++) {
+      const sq = pawnsSquares[i];
+
+      if (sq === Squares.NO_SQUARE) {
+        break;
+      }
+
+      const pawnRank = ChessGame.rank(sq);
+      const pawnFile = ChessGame.file(sq);
+
+      pawnStructure[pawnFile]++;
+    }
+
+    let pawnIslands = 0;
+    let isIslandStart = false;
+
+    for (let c = 0; c < pawnStructure.length; c++) {
+      const pawnCount = pawnStructure[c];
+
+      if (pawnCount > 1) {
+        scores -= (pawnCount - 1) * PAWN_VALUE * 0.2;
+      }
+
+      if (pawnCount && !isIslandStart) {
+        isIslandStart = true;
+        pawnIslands++;
+      }
+
+      if (isIslandStart && !pawnCount) {
+        isIslandStart = false;
+      }
+    }
+
+    scores -= (pawnIslands - 1) * PAWN_VALUE * 0.2;
+
+    return scores;
   }
 
   evalMaterial(color: Color, isEndgame: boolean): number {
     let material = this.materialScore[color];
-    let pieces = PiecesByColor[color];
+    const pieces = PiecesByColor[color];
 
     for (let i = 0; i < pieces.length; i++) {
       const p = pieces[i];
@@ -235,3 +431,10 @@ export default class MinimaxBot extends ChessGame {
     return toPieceValue - fromPieceValue;
   }
 }
+
+// TODO: eval - add isolated pawn
+// TODO: eval - add board control
+// TODO: eval - play with coefficients
+// TODO: eval - pieces development
+// TODO: move sorting - improve
+// TODO: iterative deepening

@@ -152,7 +152,8 @@ export const randInt64 = (): bigint => {
 
   return int64;
 };
-export const PIECE_VALUES = [100, 320, 330, 500, 900, 1_000_000];
+export const PIECE_VALUES = [100, 320, 330, 500, 900, 0];
+export const PAWN_VALUE = PIECE_VALUES[PieceType.PAWN];
 export const pieceSquareValues = [
   [
     // white pawn
